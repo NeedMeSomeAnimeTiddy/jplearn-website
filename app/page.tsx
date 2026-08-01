@@ -47,6 +47,22 @@ function GithubLink({ quiet = false }: { quiet?: boolean }) {
   );
 }
 
+function ChapterRail() {
+  const chapters = [
+    ["01", "Path", "features"],
+    ["02", "Route", "how-it-works"],
+    ["03", "Play", "practice"],
+    ["04", "Progress", "progress"],
+    ["05", "Back", "kickstarter"],
+  ];
+
+  return (
+    <aside className="chapter-rail" aria-label="Page chapters">
+      {chapters.map(([number, label, id]) => <a href={`#${id}`} key={id}><i aria-hidden="true" /><small>{number}</small><span>{label}</span></a>)}
+    </aside>
+  );
+}
+
 function HeroSignals() {
   return (
     <div className="hero-signals" aria-label="JPLearn product qualities">
@@ -246,6 +262,8 @@ export default function Home() {
       { threshold: 0.16 },
     );
     reveals.forEach((element) => observer.observe(element));
+    const chapterLinks = Array.from(page.querySelectorAll<HTMLAnchorElement>(".chapter-rail a"));
+    const chapterTargets = chapterLinks.map((link) => document.getElementById(link.hash.slice(1))).filter((target): target is HTMLElement => Boolean(target));
 
     let frame = 0;
     const updateScroll = () => {
@@ -253,6 +271,12 @@ export default function Home() {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       page.style.setProperty("--page-progress", `${max > 0 ? window.scrollY / max : 0}`);
       page.classList.toggle("is-scrolled", window.scrollY > 48);
+      const activeIndex = chapterTargets.reduce((active, target, index) => target.getBoundingClientRect().top <= window.innerHeight * 0.42 ? index : active, -1);
+      chapterLinks.forEach((link, index) => {
+        link.classList.toggle("is-current", index === activeIndex);
+        if (index === activeIndex) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      });
     };
     const onScroll = () => {
       if (!frame) frame = window.requestAnimationFrame(updateScroll);
@@ -287,6 +311,7 @@ export default function Home() {
           <button className="nav-download" disabled><span>Download</span><small>Soon</small></button>
         </nav>
       </header>
+      <ChapterRail />
 
       <main id="main">
         <section className="hero" id="top">
@@ -329,7 +354,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="practice-section section">
+        <section className="practice-section section" id="practice">
           <div className="practice-title reveal">
             <span className="eyebrow eyebrow--light">PRACTICE THROUGH PLAY</span>
             <h2>Practice without repeating<br />the same screen.</h2>
@@ -358,7 +383,7 @@ export default function Home() {
           <div className="reveal"><TutorDemo /></div>
         </section>
 
-        <section className="progress-section section">
+        <section className="progress-section section" id="progress">
           <div className="progress-copy reveal">
             <span className="eyebrow">PROGRESS · 積み重ね</span>
             <h2>See the work<br />adding up.</h2>
