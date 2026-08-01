@@ -47,6 +47,14 @@ function GithubLink({ quiet = false }: { quiet?: boolean }) {
   );
 }
 
+function HeroSignals() {
+  return (
+    <div className="hero-signals" aria-label="JPLearn product qualities">
+      <span>DESKTOP APP</span><i aria-hidden="true" /><span>FOCUSED DAILY ROUTE</span><i aria-hidden="true" /><span>OPTIONAL LOCAL TUTOR</span>
+    </div>
+  );
+}
+
 function AppRail() {
   return (
     <div className="app-rail" aria-hidden="true">
@@ -112,7 +120,21 @@ function PathMap() {
             <strong>{label}</strong>
           </div>
         ))}
+        <div className="path-progression" aria-label="Kanji builds from components to characters and words in context">
+          <span>BUILDING BLOCKS</span><i aria-hidden="true">→</i><strong>CHARACTERS</strong><i aria-hidden="true">→</i><span>WORDS IN CONTEXT</span>
+        </div>
         <span className="ink-seal" aria-hidden="true">学</span>
+      </div>
+    </div>
+  );
+}
+
+function DailyRhythm() {
+  return (
+    <div className="rhythm-strip reveal" aria-label="A focused daily study rhythm">
+      <div className="rhythm-lede"><span>A SMALL DAILY LOOP</span><strong>Open a route.<br />Finish with momentum.</strong></div>
+      <div className="rhythm-steps" aria-hidden="true">
+        <span><b>01</b> Learn</span><i>→</i><span><b>02</b> Recall</span><i>→</i><span><b>03</b> Use</span><i>→</i><span><b>04</b> Review</span>
       </div>
     </div>
   );
@@ -274,6 +296,7 @@ export default function Home() {
             <h1>Learn Japanese.<br /><em>Keep moving forward.</em></h1>
             <p>Lessons, reviews, games, handwriting and an AI tutor—all in one focused desktop app.</p>
             <div className="hero-actions"><DownloadButton /><GithubLink /></div>
+            <HeroSignals />
           </div>
           <div className="hero-stage" aria-label="A dimensional preview of the JPLearn desktop application">
             <Image className="layered-brand" src="/layered-mark.png" alt="" width={344} height={344} priority />
@@ -290,6 +313,7 @@ export default function Home() {
             <span className="eyebrow">ONE APP · ONE PATH</span>
             <h2>Everything you need to study.<br /><em>Nothing pulling you away.</em></h2>
           </div>
+          <DailyRhythm />
           <PathMap />
         </section>
 
