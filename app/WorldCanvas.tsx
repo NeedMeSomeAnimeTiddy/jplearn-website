@@ -64,19 +64,6 @@ function addRing(group: THREE.Group, color: THREE.ColorRepresentation, radius: n
   group.add(ring);
 }
 
-function addPaper(group: THREE.Group, color: THREE.ColorRepresentation, position: [number, number, number], scale: [number, number, number], rotation: [number, number, number], opacity = 0.62) {
-  const card = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.09), createMaterial(color, opacity));
-  card.position.set(...position);
-  card.scale.set(...scale);
-  card.rotation.set(...rotation);
-  group.add(card);
-  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(card.geometry), createLineMaterial("#fff6e8", Math.min(opacity * 0.8, 0.6)));
-  edge.position.copy(card.position);
-  edge.scale.copy(card.scale);
-  edge.rotation.copy(card.rotation);
-  group.add(edge);
-}
-
 function addGrid(group: THREE.Group, color: THREE.ColorRepresentation, width = 12, height = 8, step = 1) {
   const vertices: number[] = [];
   for (let x = -width / 2; x <= width / 2; x += step) vertices.push(x, -height / 2, -3, x, height / 2, -3);
@@ -95,6 +82,87 @@ function addStreaks(group: THREE.Group, color: THREE.ColorRepresentation, count 
   }
 }
 
+type StudyCardSpec = {
+  label: string;
+  title: string;
+  glyph?: string;
+  lines?: string[];
+  accent?: string;
+  paper?: boolean;
+};
+
+function createStudyTexture(spec: StudyCardSpec) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 720;
+  canvas.height = 420;
+  const context = canvas.getContext("2d");
+  if (!context) return new THREE.CanvasTexture(canvas);
+
+  const ink = spec.paper ? "#1b2025" : "#f5ecdf";
+  const muted = spec.paper ? "#6e685f" : "#a4a8ae";
+  const accent = spec.accent ?? "#ef6559";
+  context.fillStyle = spec.paper ? "#eee2d0" : "#121a24";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = spec.paper ? "rgba(54,44,34,.22)" : "rgba(245,236,223,.2)";
+  context.lineWidth = 3;
+  context.strokeRect(16, 16, canvas.width - 32, canvas.height - 32);
+  context.strokeStyle = spec.paper ? "rgba(54,44,34,.08)" : "rgba(245,236,223,.07)";
+  context.lineWidth = 1;
+  for (let x = 40; x < canvas.width - 20; x += 80) {
+    context.beginPath();
+    context.moveTo(x, 38);
+    context.lineTo(x, canvas.height - 38);
+    context.stroke();
+  }
+  for (let y = 62; y < canvas.height - 20; y += 72) {
+    context.beginPath();
+    context.moveTo(38, y);
+    context.lineTo(canvas.width - 38, y);
+    context.stroke();
+  }
+  context.fillStyle = accent;
+  context.font = "700 18px Arial, sans-serif";
+  context.fillText(spec.label, 42, 58);
+  context.fillStyle = ink;
+  context.font = "500 32px Georgia, serif";
+  context.fillText(spec.title, 42, 106);
+  if (spec.glyph) {
+    context.textAlign = "center";
+    context.fillStyle = ink;
+    context.font = spec.glyph.length > 4 ? "500 74px Georgia, serif" : "500 142px Georgia, serif";
+    context.fillText(spec.glyph, canvas.width / 2, 282);
+    context.textAlign = "left";
+  }
+  (spec.lines ?? []).forEach((line, index) => {
+    context.fillStyle = index === 0 ? muted : accent;
+    context.font = `${index === 0 ? "500" : "700"} ${index === 0 ? 18 : 16}px Arial, sans-serif`;
+    context.fillText(line, 42, 340 + index * 24);
+  });
+  context.fillStyle = spec.paper ? "rgba(27,32,37,.12)" : "rgba(245,236,223,.12)";
+  context.fillRect(42, 384, 636, 6);
+  context.fillStyle = accent;
+  context.fillRect(42, 384, 410, 6);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function addStudyCard(group: THREE.Group, spec: StudyCardSpec, position: [number, number, number], scale: [number, number], rotation: [number, number, number], opacity = 0.72) {
+  const material = new THREE.MeshBasicMaterial({ map: createStudyTexture(spec), opacity, transparent: true, depthWrite: false });
+  fadeMaterial(material, opacity);
+  const card = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.58), material);
+  card.position.set(...position);
+  card.scale.set(scale[0], scale[1], 1);
+  card.rotation.set(...rotation);
+  group.add(card);
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 0.58)), createLineMaterial(spec.paper ? "#6b5847" : "#f5ecdf", 0.34));
+  edge.position.copy(card.position);
+  edge.scale.copy(card.scale);
+  edge.rotation.copy(card.rotation);
+  group.add(edge);
+}
+
 function buildWorldGroups() {
   const groups = SCENES.map((_, index) => {
     const group = new THREE.Group() as WorldGroup;
@@ -104,104 +172,66 @@ function buildWorldGroups() {
 
   const [home, path, route, play, write, tutor, progress, back, final] = groups;
 
-  addBackdrop(home, "#111522", 0.42);
-  const moon = new THREE.Mesh(new THREE.SphereGeometry(2.35, 28, 18), createMaterial("#d9d0bc", 0.74));
-  moon.position.set(4.6, 1.2, -5.5);
-  home.add(moon);
-  addRing(home, "#c9ae73", 3.2, [4.6, 1.2, -5.1], [0.8, 0.2, 0.2], 0.22);
-  addRing(home, "#e7c787", 3.85, [4.6, 1.2, -5.6], [0.8, -0.1, -0.2], 0.14);
-  addParticles(home, "#b7c4dd", 130, 14, 12);
-  addPaper(home, "#1b263b", [-3.8, -1.7, -2.2], [3.8, 2.4, 1], [-0.08, 0.12, -0.18], 0.48);
+  addBackdrop(home, "#0a1625", 0.48);
+  addStudyCard(home, { label: "JPLEARN · TODAY", title: "今日の勉強", glyph: "学", lines: ["18 MIN · LESSONS + REVIEWS", "N5 PATH · 68% READY"], accent: "#ff655c" }, [1.8, 0.7, -0.5], [6.7, 3.9], [0.04, -0.14, -0.06], 0.86);
+  addStudyCard(home, { label: "NEXT REVIEW", title: "木 · tree", glyph: "木", lines: ["THURSDAY · RECALL", "KEEP MOVING"], accent: "#17d5cc", paper: true }, [-3.8, -1.6, -1.1], [3.6, 2.1], [-0.08, 0.14, -0.18], 0.72);
+  addRing(home, "#18d3ca", 3.3, [1.8, 0.7, -0.9], [0.8, 0.15, 0.12], 0.18);
+  addParticles(home, "#77c9dc", 75, 14, 12);
 
-  addBackdrop(path, "#b9aa91", 0.28);
+  addBackdrop(path, "#9f8369", 0.27);
   addGrid(path, "#6d5949", 14, 9, 1.4);
-  addRing(path, "#a6332b", 3.35, [0, 0.1, -1.2], [Math.PI / 2, 0.12, 0], 0.48);
-  addPaper(path, "#f3eadb", [-3.3, 1.3, 0], [3.7, 2.2, 1], [0.05, -0.08, -0.1], 0.72);
-  addPaper(path, "#e6d8bf", [1.1, -1.25, -0.8], [4.1, 2.3, 1], [-0.08, 0.15, 0.12], 0.68);
-  addPaper(path, "#d4b79d", [4.7, 1.75, -1.8], [2.3, 1.35, 1], [0.2, -0.18, 0.28], 0.56);
-  addParticles(path, "#8d4338", 50, 13, 8);
+  addStudyCard(path, { label: "01 · HIRAGANA", title: "Start with sound", glyph: "あ", lines: ["BUILDING BLOCKS", "READ · RECALL"], accent: "#ff655c", paper: true }, [-4.2, 1.35, 0], [3.2, 1.86], [0.04, -0.08, -0.11], 0.78);
+  addStudyCard(path, { label: "02 · KATAKANA", title: "Make it familiar", glyph: "カ", lines: ["CHARACTERS", "SEE · HEAR"], accent: "#ff655c", paper: true }, [0, 1.05, -0.4], [3.2, 1.86], [-0.03, 0.08, 0.04], 0.8);
+  addStudyCard(path, { label: "03 · KANJI", title: "Read the shape", glyph: "漢", lines: ["MEANING + FORM", "TRACE · REMEMBER"], accent: "#17d5cc", paper: true }, [4, -0.1, -0.9], [3.2, 1.86], [0.08, -0.12, -0.08], 0.78);
+  addStudyCard(path, { label: "04 · WORDS", title: "Put it in context", glyph: "言", lines: ["WORDS IN CONTEXT", "USE · REVIEW"], accent: "#ff655c", paper: true }, [0.9, -1.8, -1.3], [3.8, 2.2], [-0.05, 0.18, 0.12], 0.72);
+  addRing(path, "#a6332b", 3.1, [0, 0, -1.8], [Math.PI / 2, 0.1, 0], 0.3);
 
-  addBackdrop(route, "#8b7968", 0.25);
-  addGrid(route, "#e6d4b4", 12, 8, 2);
-  for (let index = -2; index <= 2; index += 1) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 7.8, 0.12), createMaterial("#554c45", 0.64));
-    post.position.set(index * 2.2, 0, -1.4);
-    route.add(post);
-  }
-  for (const [x, y] of [[-4, 1.65], [-1.5, -1.1], [1.4, 1.25], [4.1, -0.6]] as const) {
-    const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 12), createMaterial("#d95a43", 0.82));
-    lantern.position.set(x, y, 0.1);
-    route.add(lantern);
-    addRing(route, "#f0c87c", 0.58, [x, y, 0], [Math.PI / 2, 0, 0], 0.3);
-  }
-  addPaper(route, "#f4ead9", [2.3, -1.85, -0.7], [3.4, 1.4, 1], [0.1, -0.08, -0.2], 0.5);
+  addBackdrop(route, "#243d4d", 0.3);
+  addStudyCard(route, { label: "DAILY PLAN · 今日", title: "Your focused session", glyph: "24", lines: ["DUE CARDS · NOW", "WARM UP → REVIEW → PLAY"], accent: "#ff655c" }, [0.2, 0.3, -0.2], [7, 4.05], [-0.04, -0.13, 0.06], 0.84);
+  addStudyCard(route, { label: "ROUTE 02", title: "Review queue", glyph: "復", lines: ["24 CARDS DUE", "ONE CLEAR NEXT STEP"], accent: "#17d5cc", paper: true }, [-3.5, -1.85, -1.1], [3.8, 2.15], [0.08, 0.1, -0.16], 0.66);
+  addParticles(route, "#a9dce6", 70, 13, 8);
 
   addBackdrop(play, "#5c2526", 0.34);
-  addStreaks(play, "#f0d18a", 17);
-  addParticles(play, "#f6b19c", 120, 15, 8);
-  [
-    [-3.8, 1.4, 0.4, "#f0d18a"],
-    [0.2, -0.5, -0.2, "#f8efe0"],
-    [3.8, 1.9, 0.2, "#d67363"],
-  ].forEach(([x, y, z, color], index) => {
-    const token = new THREE.Mesh(new THREE.TorusGeometry(0.7 + index * 0.14, 0.055, 8, 40), createMaterial(color as string, 0.64));
-    token.position.set(x as number, y as number, z as number);
-    token.rotation.set(0.3, index * 0.25, 0.4);
-    play.add(token);
-  });
+  addStudyCard(play, { label: "01 · RECALL", title: "Find the meaning", glyph: "思", lines: ["FAST RESPONSE", "REMEMBER · MOVE"], accent: "#f0d18a" }, [-4, 1.4, 0.1], [3.7, 2.15], [0.02, 0.08, -0.12], 0.78);
+  addStudyCard(play, { label: "03 · HANDWRITING", title: "Draw the stroke", glyph: "書", lines: ["PRACTISE FROM MEMORY", "CHECK ORDER"], accent: "#17d5cc", paper: true }, [0.2, -0.3, -0.5], [4.3, 2.5], [-0.06, -0.06, 0.08], 0.8);
+  addStudyCard(play, { label: "04 · LISTENING", title: "Catch the sound", glyph: "聞", lines: ["HEAR · CHOOSE", "KEEP THE RHYTHM"], accent: "#f0d18a" }, [4.1, 1.7, -0.7], [3.4, 1.95], [0.08, -0.16, 0.13], 0.72);
+  addStreaks(play, "#f0d18a", 11);
+  addParticles(play, "#f6b19c", 65, 15, 8);
 
   addBackdrop(write, "#d4c7b3", 0.22);
   addGrid(write, "#897966", 12, 8, 1);
-  addPaper(write, "#f8f2e6", [1.4, 0.1, -0.8], [7.3, 4.5, 1], [0.04, -0.05, -0.06], 0.72);
-  const strokeMaterial = createMaterial("#1b1715", 0.78);
-  [[0, 1.15, 0.18, 2.25, -0.2], [-0.6, -0.15, 2.4, 0.17, 0.18], [0.72, -0.7, 0.2, 1.7, -0.8]].forEach(([x, y, width, height, rotation]) => {
-    const stroke = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.12), strokeMaterial);
-    stroke.position.set(x, y, 0.1);
-    stroke.rotation.z = rotation;
-    write.add(stroke);
-  });
-  const brush = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 4.8, 12), createMaterial("#a5362b", 0.58));
-  brush.rotation.z = -Math.PI / 2.9;
-  brush.position.set(2.5, -1.6, 0.2);
-  write.add(brush);
+  addStudyCard(write, { label: "HANDWRITING · 書く", title: "Stroke order", glyph: "永", lines: ["STROKE 01 / 05", "WRITE FROM MEMORY"], accent: "#a5362b", paper: true }, [0.8, 0.2, -0.7], [6.7, 3.9], [0.04, -0.06, -0.05], 0.84);
+  addStudyCard(write, { label: "PROMPT", title: "water · みず", glyph: "水", lines: ["TRACE → HIDE → CHECK", "CHARACTER BY CHARACTER"], accent: "#17aeb2", paper: true }, [-3.2, -1.55, -1.5], [3.5, 2], [-0.06, 0.14, 0.12], 0.7);
+  addRing(write, "#a5362b", 2.9, [0.8, 0.2, -1.2], [0.8, 0.12, -0.1], 0.18);
 
-  addBackdrop(tutor, "#17162d", 0.46);
-  addParticles(tutor, "#c7b3ff", 120, 14, 10);
-  addRing(tutor, "#a478e9", 2.9, [1.7, 0.3, -0.4], [0.5, 0.2, 0.2], 0.52);
-  addRing(tutor, "#6c51ac", 4.1, [1.7, 0.3, -1.3], [1.1, -0.18, 0.4], 0.25);
-  addPaper(tutor, "#292544", [-3, 1.1, -0.2], [3.8, 2.2, 1], [-0.08, 0.15, 0.12], 0.66);
-  addPaper(tutor, "#3b305a", [3.5, -1.25, 0.1], [3.1, 1.7, 1], [0.12, -0.15, -0.15], 0.54);
+  addBackdrop(tutor, "#102b3c", 0.4);
+  addStudyCard(tutor, { label: "OPTIONAL LOCAL TUTOR", title: "Why は sounds like wa", glyph: "は", lines: ["TOPIC PARTICLE", "EXPLANATION · EXAMPLE"], accent: "#17d5cc" }, [1.5, 0.55, -0.3], [6.4, 3.7], [0.03, -0.12, 0.06], 0.84);
+  addStudyCard(tutor, { label: "CONVERSATION", title: "Try another example", glyph: "話", lines: ["ASK WHEN STUCK", "ON THIS DEVICE"], accent: "#ff655c", paper: true }, [-3.3, -1.55, -1.1], [3.9, 2.25], [-0.08, 0.12, -0.16], 0.7);
+  addRing(tutor, "#17d5cc", 3.7, [1.5, 0.55, -1.1], [0.9, 0.16, 0.22], 0.22);
+  addParticles(tutor, "#90dbe4", 80, 14, 10);
 
-  addBackdrop(progress, "#8e887d", 0.22);
-  addRing(progress, "#865a48", 2.3, [0, 0.1, -0.8], [Math.PI / 2, 0, 0], 0.42);
-  addRing(progress, "#b88653", 3.6, [0, 0.1, -1.2], [Math.PI / 2, 0.12, 0], 0.3);
-  addRing(progress, "#ded1b3", 4.8, [0, 0.1, -1.6], [Math.PI / 2, -0.08, 0.2], 0.26);
-  for (let index = 0; index < 16; index += 1) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.5 + (index % 6) * 0.32, 0.18), createMaterial(index % 3 === 0 ? "#a6463c" : "#cab07e", 0.64));
-    bar.position.set(index * 0.55 - 4.1, -2.35 + bar.geometry.parameters.height / 2, -0.5 - (index % 3) * 0.2);
+  addBackdrop(progress, "#756b60", 0.25);
+  addStudyCard(progress, { label: "PROGRESS · 積み重ね", title: "See the work adding up", glyph: "68%", lines: ["MASTERED · 126", "8 DAY STREAK · N5 PATH"], accent: "#17d5cc" }, [0, 0.45, -0.4], [7.2, 4.15], [-0.03, 0.08, -0.04], 0.86);
+  addStudyCard(progress, { label: "STUDY HISTORY", title: "A little, often", glyph: "続", lines: ["REVIEWS · LESSONS", "EVERY SESSION COUNTS"], accent: "#ff655c", paper: true }, [-3.7, -1.65, -1.3], [3.6, 2.1], [0.08, 0.14, 0.14], 0.68);
+  for (let index = 0; index < 14; index += 1) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.35 + (index % 5) * 0.28, 0.15), createMaterial(index % 3 === 0 ? "#a6463c" : "#d6bd84", 0.58));
+    bar.position.set(index * 0.54 - 3.55, -2.2 + (bar.geometry.parameters.height as number) / 2, -0.5 - (index % 3) * 0.2);
     progress.add(bar);
   }
-  addParticles(progress, "#f1e2c7", 75, 13, 8);
 
-  addBackdrop(back, "#b8a58a", 0.24);
-  const seal = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.45, 0.35, 6), createMaterial("#a93f35", 0.82));
-  seal.position.set(3.7, 0.25, -0.5);
+  addBackdrop(back, "#8b6356", 0.22);
+  addStudyCard(back, { label: "JPLEARN 1.0", title: "Help shape the next chapter", glyph: "次", lines: ["BACKER BETA", "SUPPORT · BUILD · SHARE"], accent: "#ff655c", paper: true }, [-0.5, 0.3, -0.4], [7.1, 4.1], [0.04, -0.1, -0.05], 0.84);
+  const seal = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.32, 6), createMaterial("#ff655c", 0.72));
+  seal.position.set(4, 0.3, -0.2);
   seal.rotation.set(0.8, 0.35, 0.4);
   back.add(seal);
-  addRing(back, "#f1d49d", 2.15, [3.7, 0.25, -0.2], [0.6, -0.2, 0.1], 0.32);
-  const fold = new THREE.Mesh(new THREE.TetrahedronGeometry(2.8, 0), createMaterial("#ede1cc", 0.68));
-  fold.position.set(-2.4, 0.4, -1.2);
-  fold.rotation.set(0.24, -0.45, 0.35);
-  back.add(fold);
-  addParticles(back, "#e8c786", 70, 13, 8);
+  addRing(back, "#17d5cc", 2, [4, 0.3, -0.1], [0.6, -0.2, 0.1], 0.3);
+  addParticles(back, "#f0d18a", 48, 12, 8);
 
-  addBackdrop(final, "#111522", 0.38);
-  addRing(final, "#c6a365", 3.1, [0, 0.1, -1], [0.75, 0.22, 0], 0.34);
-  addRing(final, "#a85a4e", 4.2, [0, 0.1, -1.4], [0.8, -0.18, 0.2], 0.2);
-  addParticles(final, "#d9c9ad", 115, 14, 10);
-  const finalOrb = new THREE.Mesh(new THREE.SphereGeometry(1.2, 24, 16), createMaterial("#c45043", 0.58));
-  finalOrb.position.set(0, 0.15, -0.6);
-  final.add(finalOrb);
+  addBackdrop(final, "#0a1625", 0.46);
+  addStudyCard(final, { label: "JPLEARN", title: "Your Japanese journey", glyph: "学", lines: ["ONE FOCUSED PLACE", "KEEP MOVING FORWARD"], accent: "#17d5cc" }, [0, 0.25, -0.5], [7, 4.05], [0.02, 0.04, 0], 0.84);
+  addRing(final, "#ff655c", 3.4, [0, 0.25, -1.2], [0.8, 0.2, 0.12], 0.2);
+  addParticles(final, "#d9c9ad", 70, 14, 10);
 
   return groups;
 }
@@ -317,7 +347,10 @@ export function WorldCanvas() {
         fadeObject.geometry?.dispose();
         if (!fadeObject.material) return;
         const materials = Array.isArray(fadeObject.material) ? fadeObject.material : [fadeObject.material];
-        materials.forEach((material) => material.dispose());
+        materials.forEach((material) => {
+          (material as THREE.MeshBasicMaterial).map?.dispose();
+          material.dispose();
+        });
       }));
       renderer.dispose();
     };

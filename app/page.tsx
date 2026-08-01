@@ -27,10 +27,14 @@ const practiceModes = [
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <span className={compact ? "brand brand--compact" : "brand"}>
-      <Image src="/jplearn-mark.svg" width={30} height={29} alt="" />
+      <BrandMark />
       <span>JP<span>Learn</span></span>
     </span>
   );
+}
+
+function BrandMark() {
+  return <span className="brand-mark" aria-hidden="true"><Image src="/jplearn-icon.webp" width={320} height={320} alt="" /></span>;
 }
 
 function DownloadButton({ final = false }: { final?: boolean }) {
@@ -77,7 +81,7 @@ function HeroSignals() {
 function AppRail() {
   return (
     <div className="app-rail" aria-hidden="true">
-      <Image src="/jplearn-mark.svg" width={30} height={29} alt="" />
+      <BrandMark />
       <span className="rail-dot rail-dot--active" />
       <span className="rail-dot" />
       <span className="rail-dot" />
@@ -224,7 +228,7 @@ function HandwritingDemo() {
 function TutorDemo() {
   return (
     <div className="tutor-demo depth-card">
-      <div className="tutor-top"><span><Image src="/jplearn-mark.svg" width={20} height={19} alt="" /> Tutor</span><em><i /> On this device</em></div>
+      <div className="tutor-top"><span><BrandMark /> Tutor</span><em><i /> On this device</em></div>
       <div className="tutor-body">
         <div className="tutor-context"><small>STUDY CONTEXT</small><strong>Why does は sound like “wa” here?</strong><span>私は学生です。</span></div>
         <div className="chat-bubble chat-bubble--tutor"><small>JPLEARN TUTOR</small><p>As a topic particle, は is pronounced <b>wa</b>. It marks what the sentence is about.</p></div>
@@ -321,6 +325,7 @@ export default function Home() {
         <section className="hero" id="top" data-scene="home">
           <div className="hero-atmosphere" aria-hidden="true"><span className="kanji-cloud kanji-cloud--one">学</span><span className="kanji-cloud kanji-cloud--two">進</span><i /><i /></div>
           <div className="hero-copy reveal is-visible">
+            <Image className="hero-logo" src="/jplearn-lockup.webp" width={900} height={234} priority alt="JPLearn" />
             <span className="kicker"><i /> JAPANESE, WITH DIRECTION</span>
             <h1>Learn Japanese.<br /><em>Keep moving forward.</em></h1>
             <p>Lessons, reviews, games, handwriting and an AI tutor—all in one focused desktop app.</p>
@@ -328,7 +333,7 @@ export default function Home() {
             <HeroSignals />
           </div>
           <div className="hero-stage" aria-label="A dimensional preview of the JPLearn desktop application">
-            <Image className="layered-brand" src="/layered-mark.png" alt="" width={344} height={344} priority />
+            <div className="hero-study-card" aria-hidden="true"><span>DAILY PATH</span><strong lang="ja">学</strong><small>N5 · 68%</small></div>
             <div className="origami-plane" aria-hidden="true"><i /><i /><i /></div>
             <HeroInterface />
             <div className="float-note float-note--left" aria-hidden="true"><small>NEXT REVIEW</small><strong lang="ja">木</strong><span>tree · Thursday</span></div>

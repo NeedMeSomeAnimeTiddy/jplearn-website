@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     applicationName: "JPLearn",
     keywords: ["learn Japanese", "Japanese desktop app", "spaced repetition", "kanji", "hiragana", "handwriting practice"],
-    icons: { icon: "/jplearn-mark.svg", shortcut: "/jplearn-mark.svg" },
+    icons: { icon: "/jplearn-icon.webp", shortcut: "/jplearn-icon.webp" },
     alternates: { canonical: "/" },
     openGraph: { title, description, type: "website", siteName: "JPLearn", locale: "en_GB", images: [{ url: "/og.png", width: 1728, height: 910, alt: "JPLearn desktop Japanese learning app" }] },
     twitter: { card: "summary_large_image", title, description, images: ["/og.png"] },
