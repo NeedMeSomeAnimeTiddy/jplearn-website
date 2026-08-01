@@ -2,6 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
+
+const WorldCanvas = dynamic(() => import("./WorldCanvas").then((module) => module.WorldCanvas), { ssr: false });
 
 const GITHUB_URL = "https://github.com/NeedMeSomeAnimeTiddy/JPLearn";
 
@@ -299,6 +302,7 @@ export default function Home() {
 
   return (
     <div className="site" ref={pageRef}>
+      <WorldCanvas />
       <div className="page-progress" aria-hidden="true" />
       <a className="skip-link" href="#main">Skip to content</a>
       <header className="nav-wrap">
@@ -314,7 +318,7 @@ export default function Home() {
       <ChapterRail />
 
       <main id="main">
-        <section className="hero" id="top">
+        <section className="hero" id="top" data-scene="home">
           <div className="hero-atmosphere" aria-hidden="true"><span className="kanji-cloud kanji-cloud--one">学</span><span className="kanji-cloud kanji-cloud--two">進</span><i /><i /></div>
           <div className="hero-copy reveal is-visible">
             <span className="kicker"><i /> JAPANESE, WITH DIRECTION</span>
@@ -333,7 +337,7 @@ export default function Home() {
           <div className="scroll-cue" aria-hidden="true"><span>SCROLL TO STUDY</span><i /></div>
         </section>
 
-        <section className="path-section section" id="features">
+        <section className="path-section section" id="features" data-scene="path">
           <div className="section-heading section-heading--center reveal">
             <span className="eyebrow">ONE APP · ONE PATH</span>
             <h2>Everything you need to study.<br /><em>Nothing pulling you away.</em></h2>
@@ -342,7 +346,7 @@ export default function Home() {
           <PathMap />
         </section>
 
-        <section className="adaptive-section section" id="how-it-works">
+        <section className="adaptive-section section" id="how-it-works" data-scene="route">
           <div className="adaptive-sticky">
             <div className="section-heading reveal">
               <span className="eyebrow">STUDY THAT ADAPTS</span>
@@ -354,7 +358,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="practice-section section" id="practice">
+        <section className="practice-section section" id="practice" data-scene="play">
           <div className="practice-title reveal">
             <span className="eyebrow eyebrow--light">PRACTICE THROUGH PLAY</span>
             <h2>Practice without repeating<br />the same screen.</h2>
@@ -363,7 +367,7 @@ export default function Home() {
           <div className="practice-line" aria-hidden="true"><span /></div>
         </section>
 
-        <section className="handwriting-section section">
+        <section className="handwriting-section section" data-scene="write">
           <div className="handwriting-copy reveal">
             <span className="eyebrow">HANDWRITING · 書く</span>
             <h2>Learn how Japanese<br />is written.</h2>
@@ -372,7 +376,7 @@ export default function Home() {
           <div className="reveal"><HandwritingDemo /></div>
         </section>
 
-        <section className="tutor-section section">
+        <section className="tutor-section section" data-scene="tutor">
           <div className="local-orbit" aria-hidden="true"><i /><i /><span>LOCAL</span></div>
           <div className="tutor-copy reveal">
             <span className="eyebrow eyebrow--light">OPTIONAL LOCAL TUTOR</span>
@@ -383,7 +387,7 @@ export default function Home() {
           <div className="reveal"><TutorDemo /></div>
         </section>
 
-        <section className="progress-section section" id="progress">
+        <section className="progress-section section" id="progress" data-scene="progress">
           <div className="progress-copy reveal">
             <span className="eyebrow">PROGRESS · 積み重ね</span>
             <h2>See the work<br />adding up.</h2>
@@ -392,7 +396,7 @@ export default function Home() {
           <div className="reveal"><ProgressScene /></div>
         </section>
 
-        <section className="kickstarter-section" id="kickstarter">
+        <section className="kickstarter-section" id="kickstarter" data-scene="back">
           <div className="kickstarter-paper reveal">
             <span className="paper-fold paper-fold--one" aria-hidden="true" /><span className="paper-fold paper-fold--two" aria-hidden="true" />
             <span className="kickstarter-label">BACK THE NEXT CHAPTER · 次へ</span>
@@ -403,7 +407,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="final-section">
+        <section className="final-section" data-scene="final">
           <span className="final-kanji" aria-hidden="true">道</span>
           <div className="final-inner reveal">
             <Logo />
