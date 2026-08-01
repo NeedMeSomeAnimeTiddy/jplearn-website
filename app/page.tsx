@@ -34,7 +34,7 @@ function Logo({ compact = false }: { compact?: boolean }) {
 }
 
 function BrandMark() {
-  return <span className="brand-mark" aria-hidden="true"><Image src="/jplearn-icon.webp" width={320} height={320} alt="" /></span>;
+  return <span className="brand-mark" aria-hidden="true"><Image src="/jplearn-icon.png" width={256} height={256} unoptimized alt="" /></span>;
 }
 
 function DownloadButton({ final = false }: { final?: boolean }) {
@@ -325,7 +325,7 @@ export default function Home() {
         <section className="hero" id="top" data-scene="home">
           <div className="hero-atmosphere" aria-hidden="true"><span className="kanji-cloud kanji-cloud--one">学</span><span className="kanji-cloud kanji-cloud--two">進</span><i /><i /></div>
           <div className="hero-copy reveal is-visible">
-            <Image className="hero-logo" src="/jplearn-lockup.webp" width={900} height={234} priority alt="JPLearn" />
+            <Image className="hero-logo" src="/jplearn-lockup.png" width={900} height={234} priority unoptimized alt="JPLearn" />
             <span className="kicker"><i /> JAPANESE, WITH DIRECTION</span>
             <h1>Learn Japanese.<br /><em>Keep moving forward.</em></h1>
             <p>Lessons, reviews, games, handwriting and an AI tutor—all in one focused desktop app.</p>
