@@ -138,6 +138,50 @@ function addPine(group: THREE.Group, color: THREE.ColorRepresentation, position:
   group.add(tree);
 }
 
+function addStoneLantern(group: THREE.Group, color: THREE.ColorRepresentation, position: [number, number, number], scale = 1) {
+  const lantern = new THREE.Group();
+  const material = createMaterial(color, 0.54);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.5, 0.18, 6), material);
+  const stem = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.25, 0.2), material);
+  const chamber = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.52, 0.54), material);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(0.68, 0.34, 4), material);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 0.28, 6), material);
+  base.position.y = 0.08;
+  stem.position.y = 0.78;
+  chamber.position.y = 1.57;
+  roof.position.y = 2;
+  roof.rotation.y = Math.PI / 4;
+  cap.position.y = 2.28;
+  lantern.add(base, stem, chamber, roof, cap);
+  lantern.position.set(...position);
+  lantern.scale.setScalar(scale);
+  group.add(lantern);
+}
+
+function addBamboo(group: THREE.Group, color: THREE.ColorRepresentation, position: [number, number, number], scale = 1) {
+  const cluster = new THREE.Group();
+  const material = createMaterial(color, 0.5);
+  [-0.34, 0, 0.38].forEach((offset, index) => {
+    const height = 2.7 + index * 0.38;
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, height, 7), material);
+    stem.position.set(offset, height / 2, index * -0.12);
+    stem.rotation.z = (index - 1) * 0.035;
+    cluster.add(stem);
+    for (let node = 1; node < 4; node += 1) {
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.078, 0.035, 7), material);
+      ring.position.set(offset, node * height / 4, index * -0.12);
+      cluster.add(ring);
+    }
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.62, 3), material);
+    leaf.position.set(offset + (index === 1 ? -0.3 : 0.3), height * 0.74, 0);
+    leaf.rotation.z = index === 1 ? Math.PI / 2.7 : -Math.PI / 2.7;
+    cluster.add(leaf);
+  });
+  cluster.position.set(...position);
+  cluster.scale.setScalar(scale);
+  group.add(cluster);
+}
+
 function addTorii(group: THREE.Group, position: [number, number, number], scale = 1, color: THREE.ColorRepresentation = "#a6332b") {
   const material = createMaterial(color, 0.66);
   const post = new THREE.Mesh(new THREE.BoxGeometry(0.13 * scale, 3.2 * scale, 0.13 * scale), material);
@@ -262,6 +306,7 @@ function buildWorldGroups() {
   addGround(path, "#b69a7a", 0.42);
   addPine(path, "#6f554b", [-6.1, -3.45, -4.3], 0.84);
   addPine(path, "#755a4d", [6.4, -3.55, -4.1], 1.02);
+  addStoneLantern(path, "#766554", [-5, -3.2, -3.2], 0.62);
   addStudyPath(path, "#a6332b", [[-5.6, -2.25, -1], [-3.2, -1.55, -0.5], [-0.7, -1.05, -0.1], [1.9, -0.55, 0], [4.8, 0.1, -0.2]], 0.66);
   addGrid(path, "#6d5949", 14, 9, 1.4);
   addStudyCard(path, { label: "01 · HIRAGANA", title: "Start with sound", glyph: "あ", lines: ["BUILDING BLOCKS", "READ · RECALL"], accent: "#ff655c", paper: true }, [-4.2, 1.35, 0], [2.8, 1.63], [0.04, -0.08, -0.11], 0.6);
@@ -277,6 +322,7 @@ function buildWorldGroups() {
   addGround(route, "#18303d", 0.58);
   addPine(route, "#224654", [-6.2, -3.45, -4.3], 0.92);
   addPine(route, "#1e3b4a", [6.1, -3.5, -4.1], 1.14);
+  addStoneLantern(route, "#5b7980", [-4.8, -3.2, -3.1], 0.62);
   addTorii(route, [4.1, -1.95, -1.2], 0.55, "#ff655c");
   addStudyPath(route, "#17d5cc", [[-4.6, -2.25, -1], [-2.6, -1.55, -0.6], [-0.6, -0.9, -0.2], [1.8, -0.55, -0.1], [4, -0.1, -0.3]], 0.58);
   addStudyCard(route, { label: "DAILY PLAN · 今日", title: "Your focused session", glyph: "24", lines: ["DUE CARDS · NOW", "WARM UP → REVIEW → PLAY"], accent: "#ff655c" }, [0.2, 0.3, -0.2], [5.6, 3.25], [-0.04, -0.13, 0.06], 0.62);
@@ -304,6 +350,7 @@ function buildWorldGroups() {
   addGround(write, "#c7b8a2", 0.56);
   addPine(write, "#77675e", [-6, -3.5, -4.25], 0.84);
   addPine(write, "#64564f", [6.2, -3.55, -4.1], 1.04);
+  addBamboo(write, "#58675b", [5.25, -3.35, -3.2], 0.8);
   addStudyPath(write, "#a5362b", [[-4.8, -2.1, -1], [-2.4, -1.55, -0.5], [0.1, -1.2, -0.1], [2.7, -0.8, -0.2]], 0.32);
   addGrid(write, "#897966", 12, 8, 1);
   addStudyCard(write, { label: "HANDWRITING · 書く", title: "Stroke order", glyph: "永", lines: ["STROKE 01 / 05", "WRITE FROM MEMORY"], accent: "#a5362b", paper: true }, [0.8, 0.2, -0.7], [5.3, 3.08], [0.04, -0.06, -0.05], 0.6);
@@ -317,6 +364,7 @@ function buildWorldGroups() {
   addGround(tutor, "#0b202d", 0.62);
   addPine(tutor, "#184258", [-6.1, -3.45, -4.3], 0.9);
   addPine(tutor, "#133247", [6.3, -3.55, -4.1], 1.08);
+  addStoneLantern(tutor, "#4f7580", [5.1, -3.2, -3.15], 0.62);
   addStudyPath(tutor, "#17d5cc", [[-4.6, -2.15, -1], [-2.3, -1.55, -0.5], [0, -1.1, -0.2], [2.6, -0.62, -0.1], [4.7, -0.18, -0.2]], 0.48);
   addStudyCard(tutor, { label: "OPTIONAL LOCAL TUTOR", title: "Why は sounds like wa", glyph: "は", lines: ["TOPIC PARTICLE", "EXPLANATION · EXAMPLE"], accent: "#17d5cc" }, [1.5, 0.55, -0.3], [5.2, 3], [0.03, -0.12, 0.06], 0.6);
   addStudyCard(tutor, { label: "CONVERSATION", title: "Try another example", glyph: "話", lines: ["ASK WHEN STUCK", "ON THIS DEVICE"], accent: "#ff655c", paper: true }, [-3.3, -1.55, -1.1], [3.2, 1.85], [-0.08, 0.12, -0.16], 0.52);
@@ -330,6 +378,7 @@ function buildWorldGroups() {
   addGround(progress, "#5d554d", 0.72);
   addPine(progress, "#806c58", [-6.2, -3.45, -4.25], 0.88);
   addPine(progress, "#665648", [6.1, -3.55, -4.1], 1.08);
+  addBamboo(progress, "#6d7159", [-5.2, -3.35, -3.2], 0.76);
   addStudyPath(progress, "#17d5cc", [[-5.2, -2.25, -1], [-3.2, -1.65, -0.6], [-1.1, -1.05, -0.2], [1.2, -0.45, -0.1], [3.6, 0.22, -0.3]], 0.72);
   addStudyCard(progress, { label: "PROGRESS · 積み重ね", title: "See the work adding up", glyph: "68%", lines: ["MASTERED · 126", "8 DAY STREAK · N5 PATH"], accent: "#17d5cc" }, [0, 0.45, -0.4], [5.5, 3.17], [-0.03, 0.08, -0.04], 0.62);
   addStudyCard(progress, { label: "STUDY HISTORY", title: "A little, often", glyph: "続", lines: ["REVIEWS · LESSONS", "EVERY SESSION COUNTS"], accent: "#ff655c", paper: true }, [-3.7, -1.65, -1.3], [3, 1.75], [0.08, 0.14, 0.14], 0.5);
@@ -362,6 +411,7 @@ function buildWorldGroups() {
   addGround(final, "#07101a", 0.8);
   addPine(final, "#15364d", [-6.2, -3.45, -4.2], 0.9);
   addPine(final, "#102b42", [6.2, -3.55, -4.05], 1.1);
+  addStoneLantern(final, "#5f7783", [-4.8, -3.2, -3.1], 0.65);
   addTorii(final, [0, -2.1, -1.2], 0.74, "#ff655c");
   addStudyPath(final, "#17d5cc", [[-4.8, -2.25, -1], [-2.6, -1.65, -0.6], [-0.4, -1.1, -0.2], [2, -0.55, -0.1], [4.8, 0.1, -0.2]], 0.46);
   addStudyCard(final, { label: "JPLEARN", title: "Your Japanese journey", glyph: "学", lines: ["ONE FOCUSED PLACE", "KEEP MOVING FORWARD"], accent: "#17d5cc" }, [0, 0.25, -0.5], [5.5, 3.17], [0.02, 0.04, 0], 0.62);

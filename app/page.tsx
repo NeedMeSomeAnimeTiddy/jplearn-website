@@ -56,17 +56,27 @@ function GithubLink({ quiet = false }: { quiet?: boolean }) {
 
 function ChapterRail() {
   const chapters = [
-    ["01", "Path", "features"],
-    ["02", "Route", "how-it-works"],
-    ["03", "Play", "practice"],
-    ["04", "Progress", "progress"],
-    ["05", "Back", "kickstarter"],
+    ["01", "道", "Path", "features"],
+    ["02", "習", "Route", "how-it-works"],
+    ["03", "遊", "Play", "practice"],
+    ["04", "積", "Progress", "progress"],
+    ["05", "次", "Back", "kickstarter"],
   ];
 
   return (
     <aside className="chapter-rail" aria-label="Page chapters">
-      {chapters.map(([number, label, id]) => <a href={`#${id}`} key={id}><i aria-hidden="true" /><small>{number}</small><span>{label}</span></a>)}
+      {chapters.map(([number, kanji, label, id]) => <a href={`#${id}`} key={id}><i aria-hidden="true" /><small>{number}</small><span><b lang="ja">{kanji}</b>{label}</span></a>)}
     </aside>
+  );
+}
+
+function ChapterMark({ number, kanji, phrase, light = false }: { number: string; kanji: string; phrase: string; light?: boolean }) {
+  return (
+    <div className={light ? "chapter-mark chapter-mark--light" : "chapter-mark"} aria-hidden="true">
+      <span>{number}</span>
+      <b lang="ja">{kanji}</b>
+      <small lang="ja">{phrase}</small>
+    </div>
   );
 }
 
@@ -307,6 +317,7 @@ export default function Home() {
   return (
     <div className="site" ref={pageRef}>
       <WorldCanvas />
+      <div className="washi-grain" aria-hidden="true" />
       <div className="page-progress" aria-hidden="true" />
       <a className="skip-link" href="#main">Skip to content</a>
       <header className="nav-wrap">
@@ -323,7 +334,11 @@ export default function Home() {
 
       <main id="main">
         <section className="hero" id="top" data-scene="home">
-          <div className="hero-atmosphere" aria-hidden="true"><span className="kanji-cloud kanji-cloud--one">学</span><span className="kanji-cloud kanji-cloud--two">進</span><i /><i /></div>
+          <div className="hero-atmosphere" aria-hidden="true">
+            <span className="kanji-cloud kanji-cloud--one">学</span><span className="kanji-cloud kanji-cloud--two">進</span><i /><i />
+            <span className="enso-mark"><b lang="ja">学</b></span>
+            <span className="hero-tategaki" lang="ja"><b>学びを、前へ。</b><small>毎日、少しずつ。</small></span>
+          </div>
           <div className="hero-copy reveal is-visible">
             <Image className="hero-logo" src="/jplearn-lockup.png" width={900} height={234} priority unoptimized alt="JPLearn" />
             <span className="kicker"><i /> JAPANESE, WITH DIRECTION</span>
@@ -343,6 +358,7 @@ export default function Home() {
         </section>
 
         <section className="path-section section" id="features" data-scene="path">
+          <ChapterMark number="一" kanji="道" phrase="ひとつの道" />
           <div className="section-heading section-heading--center reveal">
             <span className="eyebrow">ONE APP · ONE PATH</span>
             <h2>Everything you need to study.<br /><em>Nothing pulling you away.</em></h2>
@@ -352,6 +368,7 @@ export default function Home() {
         </section>
 
         <section className="adaptive-section section" id="how-it-works" data-scene="route">
+          <ChapterMark number="二" kanji="習" phrase="今日の一歩" />
           <div className="adaptive-sticky">
             <div className="section-heading reveal">
               <span className="eyebrow">STUDY THAT ADAPTS</span>
@@ -364,6 +381,7 @@ export default function Home() {
         </section>
 
         <section className="practice-section section" id="practice" data-scene="play">
+          <ChapterMark number="三" kanji="遊" phrase="遊んで覚える" light />
           <div className="practice-title reveal">
             <span className="eyebrow eyebrow--light">PRACTICE THROUGH PLAY</span>
             <h2>Practice without repeating<br />the same screen.</h2>
@@ -373,6 +391,7 @@ export default function Home() {
         </section>
 
         <section className="handwriting-section section" data-scene="write">
+          <ChapterMark number="四" kanji="書" phrase="一画ずつ" />
           <div className="handwriting-copy reveal">
             <span className="eyebrow">HANDWRITING · 書く</span>
             <h2>Learn how Japanese<br />is written.</h2>
@@ -382,6 +401,7 @@ export default function Home() {
         </section>
 
         <section className="tutor-section section" data-scene="tutor">
+          <ChapterMark number="五" kanji="話" phrase="迷ったときに" light />
           <div className="local-orbit" aria-hidden="true"><i /><i /><span>LOCAL</span></div>
           <div className="tutor-copy reveal">
             <span className="eyebrow eyebrow--light">OPTIONAL LOCAL TUTOR</span>
@@ -393,6 +413,7 @@ export default function Home() {
         </section>
 
         <section className="progress-section section" id="progress" data-scene="progress">
+          <ChapterMark number="六" kanji="積" phrase="積み重ね" />
           <div className="progress-copy reveal">
             <span className="eyebrow">PROGRESS · 積み重ね</span>
             <h2>See the work<br />adding up.</h2>
@@ -402,6 +423,7 @@ export default function Home() {
         </section>
 
         <section className="kickstarter-section" id="kickstarter" data-scene="back">
+          <ChapterMark number="七" kanji="次" phrase="次の章へ" />
           <div className="kickstarter-paper reveal">
             <span className="paper-fold paper-fold--one" aria-hidden="true" /><span className="paper-fold paper-fold--two" aria-hidden="true" />
             <span className="kickstarter-label">BACK THE NEXT CHAPTER · 次へ</span>
@@ -413,6 +435,7 @@ export default function Home() {
         </section>
 
         <section className="final-section" data-scene="final">
+          <ChapterMark number="結" kanji="道" phrase="学びの道" light />
           <span className="final-kanji" aria-hidden="true">道</span>
           <div className="final-inner reveal">
             <Logo />
@@ -423,7 +446,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer><Logo compact /><p>Study with direction.</p><GithubLink quiet /></footer>
+      <footer><Logo compact /><p>Study with direction. <span lang="ja">学びを、前へ。</span></p><GithubLink quiet /></footer>
     </div>
   );
 }
