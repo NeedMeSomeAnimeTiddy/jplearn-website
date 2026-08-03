@@ -56,10 +56,10 @@ function GithubLink({ quiet = false }: { quiet?: boolean }) {
 
 function ChapterRail() {
   const chapters = [
-    ["01", "道", "Path", "features"],
-    ["02", "習", "Route", "how-it-works"],
+    ["01", "庭", "Garden", "features"],
+    ["02", "縁", "Rhythm", "how-it-works"],
     ["03", "遊", "Play", "practice"],
-    ["04", "積", "Progress", "progress"],
+    ["04", "積", "Growth", "progress"],
     ["05", "次", "Back", "kickstarter"],
   ];
 
@@ -141,23 +141,22 @@ function HeroInterface() {
 
 function PathMap() {
   return (
-    <div className="path-stage" aria-label="A connected study path from Hiragana to conversation">
-      <div className="path-paper path-paper--back" aria-hidden="true" />
-      <div className="path-paper">
-        <span className="path-caption">YOUR STUDY PATH · 学びの道</span>
-        <div className="path-line" aria-hidden="true"><span /></div>
-        {studyAreas.map(([jp, label], index) => (
-          <div className={`path-stop path-stop--${index + 1}`} key={label}>
-            <span className="path-stop__mark" aria-hidden="true">{jp}</span>
-            <span className="path-stop__number">0{index + 1}</span>
-            <strong>{label}</strong>
-          </div>
-        ))}
-        <div className="path-progression" aria-label="Kanji builds from components to characters and words in context">
-          <span>BUILDING BLOCKS</span><i aria-hidden="true">→</i><strong>CHARACTERS</strong><i aria-hidden="true">→</i><span>WORDS IN CONTEXT</span>
+    <div className="garden-stage" aria-label="A dry-garden-inspired study path from Hiragana to conversation">
+      <div className="garden-sand" aria-hidden="true"><i /><i /><i /><i /></div>
+      <div className="garden-island garden-island--one" aria-hidden="true"><i /><i /><i /></div>
+      <div className="garden-island garden-island--two" aria-hidden="true"><i /><i /></div>
+      <div className="garden-route" aria-hidden="true"><span /></div>
+      <span className="garden-caption">学びの庭 <small>THE STUDY GARDEN</small></span>
+      {studyAreas.map(([jp, label], index) => (
+        <div className={`garden-stop garden-stop--${index + 1}`} key={label}>
+          <span className="garden-stone" aria-hidden="true">{jp}</span>
+          <span className="garden-stop__label"><small>0{index + 1}</small><strong>{label}</strong></span>
         </div>
-        <span className="ink-seal" aria-hidden="true">学</span>
+      ))}
+      <div className="garden-progression" aria-label="Kanji builds from components to characters and words in context">
+        <span>BUILDING BLOCKS</span><i aria-hidden="true" /><strong>CHARACTERS</strong><i aria-hidden="true" /><span>WORDS IN CONTEXT</span>
       </div>
+      <span className="ink-seal" aria-hidden="true">道</span>
     </div>
   );
 }
@@ -200,17 +199,23 @@ function DailyPlan() {
 
 function PracticeStage() {
   return (
-    <div className="practice-viewport" aria-label="Five practice modes shown as moving JPLearn interfaces">
-      <div className="practice-track">
-        {[...practiceModes, ...practiceModes].map(([label, cue, jp], index) => (
-          <article className={`game-panel game-panel--${(index % 5) + 1}`} key={`${label}-${index}`} aria-hidden={index >= 5}>
-            <div className="game-panel__top"><span>{cue}</span><b>0{(index % 5) + 1}</b></div>
-            <span className="game-panel__jp">{jp}</span>
-            <h3>{label}</h3>
-            <div className="game-ui"><i /><i /><i /></div>
-          </article>
-        ))}
+    <div className="matsuri-stage">
+      <div className="lantern-line" aria-hidden="true">
+        {practiceModes.map(([label, , jp]) => <span key={label}><b lang="ja">{jp.slice(0, 1)}</b><small>{label}</small></span>)}
       </div>
+      <div className="practice-viewport" aria-label="Five practice modes shown as moving JPLearn interfaces">
+        <div className="practice-track">
+          {[...practiceModes, ...practiceModes].map(([label, cue, jp], index) => (
+            <article className={`game-panel game-panel--${(index % 5) + 1}`} key={`${label}-${index}`} aria-hidden={index >= 5}>
+              <div className="game-panel__top"><span>{cue}</span><b>0{(index % 5) + 1}</b></div>
+              <span className="game-panel__jp">{jp}</span>
+              <h3>{label}</h3>
+              <div className="game-ui"><i /><i /><i /></div>
+            </article>
+          ))}
+        </div>
+      </div>
+      <div className="matsuri-floor" aria-hidden="true"><span>遊</span><span>聞</span><span>書</span><span>話</span></div>
     </div>
   );
 }
@@ -218,6 +223,11 @@ function PracticeStage() {
 function HandwritingDemo() {
   return (
     <div className="writing-scene">
+      <div className="shodo-tools" aria-hidden="true">
+        <span className="inkstone"><i /></span>
+        <span className="brush"><i /></span>
+        <small lang="ja">硯と筆</small>
+      </div>
       <div className="character-sheet">
         <span className="sheet-label">STROKE 01 / 05</span>
         <span className="grid-lines" aria-hidden="true" />
@@ -249,6 +259,21 @@ function TutorDemo() {
   );
 }
 
+function Tokonoma() {
+  return (
+    <div className="tokonoma" aria-hidden="true">
+      <span className="tokonoma-beam" />
+      <span className="kakejiku">
+        <i />
+        <b lang="ja">問</b>
+        <small lang="ja">問いから、理解へ。</small>
+        <i />
+      </span>
+      <span className="tokonoma-vase"><i /><i /></span>
+    </div>
+  );
+}
+
 function ProgressScene() {
   const cells = Array.from({ length: 56 }, (_, i) => i);
   return (
@@ -262,6 +287,17 @@ function ProgressScene() {
         </div>
         <div className="mastery-arc"><span><b>68%</b><small>N5 path</small></span></div>
       </div>
+    </div>
+  );
+}
+
+function ProgressScroll() {
+  return (
+    <div className="progress-scroll">
+      <span className="scroll-dowel scroll-dowel--top" aria-hidden="true" />
+      <ProgressScene />
+      <span className="scroll-dowel scroll-dowel--bottom" aria-hidden="true" />
+      <span className="scroll-cord" aria-hidden="true" />
     </div>
   );
 }
@@ -334,6 +370,9 @@ export default function Home() {
 
       <main id="main">
         <section className="hero" id="top" data-scene="home">
+          <div className="noren-threshold" aria-hidden="true">
+            <span /><span /><span className="noren-mon"><b lang="ja">学</b><small>JPLEARN</small></span><span /><span />
+          </div>
           <div className="hero-atmosphere" aria-hidden="true">
             <span className="kanji-cloud kanji-cloud--one">学</span><span className="kanji-cloud kanji-cloud--two">進</span><i /><i />
             <span className="enso-mark"><b lang="ja">学</b></span>
@@ -341,7 +380,7 @@ export default function Home() {
           </div>
           <div className="hero-copy reveal is-visible">
             <Image className="hero-logo" src="/jplearn-lockup.png" width={900} height={234} priority unoptimized alt="JPLearn" />
-            <span className="kicker"><i /> JAPANESE, WITH DIRECTION</span>
+            <span className="kicker"><i /> JAPANESE, WITH DIRECTION · 学びの道</span>
             <h1>Learn Japanese.<br /><em>Keep moving forward.</em></h1>
             <p>Lessons, reviews, games, handwriting and an AI tutor—all in one focused desktop app.</p>
             <div className="hero-actions"><DownloadButton /><GithubLink /></div>
@@ -369,21 +408,26 @@ export default function Home() {
 
         <section className="adaptive-section section" id="how-it-works" data-scene="route">
           <ChapterMark number="二" kanji="習" phrase="今日の一歩" />
-          <div className="adaptive-sticky">
-            <div className="section-heading reveal">
-              <span className="eyebrow">STUDY THAT ADAPTS</span>
-              <h2>Know what to<br />study next.</h2>
-              <p>JPLearn turns your progress into a focused daily session.</p>
-              <span className="japanese-aside" lang="ja">今日の一歩</span>
+          <div className="engawa-frame">
+            <div className="engawa-eaves" aria-hidden="true"><i /><i /><i /><i /><i /></div>
+            <div className="adaptive-sticky">
+              <div className="section-heading reveal">
+                <span className="eyebrow">DAILY RHYTHM · 縁側</span>
+                <h2>Know what to<br />study next.</h2>
+                <p>JPLearn turns your progress into a focused daily session.</p>
+                <span className="japanese-aside" lang="ja">今日の一歩</span>
+              </div>
+              <div className="demo-wrap reveal"><DailyPlan /></div>
             </div>
-            <div className="demo-wrap reveal"><DailyPlan /></div>
+            <div className="engawa-floor" aria-hidden="true"><span /><span /><span /><span /><span /><span /></div>
+            <span className="engawa-caption" aria-hidden="true"><b lang="ja">縁側</b><small>ONE CLEAR ROUTE BETWEEN HERE AND NEXT</small></span>
           </div>
         </section>
 
         <section className="practice-section section" id="practice" data-scene="play">
           <ChapterMark number="三" kanji="遊" phrase="遊んで覚える" light />
           <div className="practice-title reveal">
-            <span className="eyebrow eyebrow--light">PRACTICE THROUGH PLAY</span>
+            <span className="eyebrow eyebrow--light">PRACTICE THROUGH PLAY · 遊ぶ</span>
             <h2>Practice without repeating<br />the same screen.</h2>
           </div>
           <PracticeStage />
@@ -393,7 +437,7 @@ export default function Home() {
         <section className="handwriting-section section" data-scene="write">
           <ChapterMark number="四" kanji="書" phrase="一画ずつ" />
           <div className="handwriting-copy reveal">
-            <span className="eyebrow">HANDWRITING · 書く</span>
+            <span className="eyebrow">HANDWRITING · 書道</span>
             <h2>Learn how Japanese<br />is written.</h2>
             <p>Follow stroke order, practise from memory, and build confidence character by character.</p>
           </div>
@@ -404,11 +448,12 @@ export default function Home() {
           <ChapterMark number="五" kanji="話" phrase="迷ったときに" light />
           <div className="local-orbit" aria-hidden="true"><i /><i /><span>LOCAL</span></div>
           <div className="tutor-copy reveal">
-            <span className="eyebrow eyebrow--light">OPTIONAL LOCAL TUTOR</span>
+            <span className="eyebrow eyebrow--light">QUIET HELP · 問う</span>
             <h2>Ask when you<br />get stuck.</h2>
             <p>Use an optional locally installed AI tutor for explanations, examples, and conversation practice.</p>
             <span className="local-note"><i /> Runs with a locally installed model</span>
           </div>
+          <Tokonoma />
           <div className="reveal"><TutorDemo /></div>
         </section>
 
@@ -419,12 +464,13 @@ export default function Home() {
             <h2>See the work<br />adding up.</h2>
             <p>Every review, lesson, and completed session moves your Japanese forward.</p>
           </div>
-          <div className="reveal"><ProgressScene /></div>
+          <div className="reveal"><ProgressScroll /></div>
         </section>
 
         <section className="kickstarter-section" id="kickstarter" data-scene="back">
           <ChapterMark number="七" kanji="次" phrase="次の章へ" />
           <div className="kickstarter-paper reveal">
+            <span className="paper-binding" aria-hidden="true"><i /><i /><i /><i /><i /></span>
             <span className="paper-fold paper-fold--one" aria-hidden="true" /><span className="paper-fold paper-fold--two" aria-hidden="true" />
             <span className="kickstarter-label">BACK THE NEXT CHAPTER · 次へ</span>
             <h2>Help shape JPLearn 1.0.</h2>
@@ -436,6 +482,7 @@ export default function Home() {
 
         <section className="final-section" data-scene="final">
           <ChapterMark number="結" kanji="道" phrase="学びの道" light />
+          <div className="final-gate" aria-hidden="true"><i /><i /><span /><b /></div>
           <span className="final-kanji" aria-hidden="true">道</span>
           <div className="final-inner reveal">
             <Logo />
