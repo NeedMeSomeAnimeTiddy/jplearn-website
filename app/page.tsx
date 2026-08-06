@@ -119,7 +119,7 @@ function HeroInterface() {
           <div className="session-card">
             <div className="session-copy">
               <span className="eyebrow eyebrow--red">TODAY&apos;S PATH</span>
-              <h3>Daily study</h3>
+              <strong>Daily study</strong>
               <p>18 min · lessons + reviews</p>
               <button tabIndex={-1}>Begin session <span>→</span></button>
             </div>
