@@ -21,22 +21,29 @@ test("server-renders the complete JPLearn landing page", async () => {
   const html = await response.text();
   assert.match(html, /<title>JPLearn — A Better Way to Learn Japanese<\/title>/i);
   assert.match(html, /Learn Japanese\.<!-- -->Keep moving forward\.|Learn Japanese\./i);
-  assert.match(html, /Everything you need to study/);
-  assert.match(html, /A SMALL DAILY LOOP/);
+  assert.match(html, /Stop juggling apps/);
+  assert.match(html, /Everything builds/);
   assert.match(html, /WORDS IN CONTEXT/);
   assert.match(html, /Know what to/);
   assert.match(html, /Practice without repeating/);
   assert.match(html, /Learn how Japanese/);
   assert.match(html, /Ask when you/);
   assert.match(html, /See the work/);
-  assert.match(html, /Help shape JPLearn 1\.0/);
+  assert.match(html, /Questions worth/);
+  assert.match(html, /Follow the build/);
   assert.match(html, /Your Japanese journey/);
 });
 
-test("keeps unavailable calls to action non-interactive", async () => {
+test("gives visitors a real, working call to action", async () => {
+  const html = await (await render()).text();
+  assert.match(html, /href="https:\/\/github\.com\/NeedMeSomeAnimeTiddy\/JPLearn\/subscription"/);
+  assert.match(html, /Get notified on GitHub/);
+});
+
+test("keeps unbuilt calls to action honestly non-interactive", async () => {
   const html = await (await render()).text();
   const disabledButtons = html.match(/<button[^>]*disabled=""[^>]*>/g) ?? [];
-  assert.ok(disabledButtons.length >= 4);
+  assert.ok(disabledButtons.length >= 3);
   assert.match(html, /Coming soon/);
   assert.doesNotMatch(html, /href=["']#["']/i);
   assert.doesNotMatch(html, /href=["']javascript:/i);
@@ -45,8 +52,9 @@ test("keeps unavailable calls to action non-interactive", async () => {
 test("includes canonical GitHub and social metadata", async () => {
   const html = await (await render()).text();
   assert.match(html, /https:\/\/github\.com\/NeedMeSomeAnimeTiddy\/JPLearn/);
-  assert.match(html, /property="og:image" content="https:\/\/jplearn\.example\/og\.png"/);
+  assert.match(html, /property="og:image" content="https:\/\/jplearn\.example\/og\.jpg"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
   assert.match(html, /rel="canonical" href="https:\/\/jplearn\.example\/"/);
+  assert.match(html, /application\/ld\+json/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/);
 });
