@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 
@@ -50,14 +50,13 @@ function Logo({ compact = false }: { compact?: boolean }) {
 }
 
 function BrandMark() {
-  return <span className="brand-mark" aria-hidden="true"><Image src="/jplearn-icon.png" width={256} height={256} unoptimized alt="" /></span>;
+  return <span className="brand-mark" aria-hidden="true"><Image src="/jplearn-icon.png" width={128} height={128} unoptimized alt="" /></span>;
 }
 
 function DownloadButton({ final = false }: { final?: boolean }) {
   return (
     <button className={final ? "button button--paper" : "button button--primary"} disabled>
-      <span>Download JPLearn</span>
-      <small>Coming soon</small>
+      <span>Download JPLearn</span> <small>Coming soon</small>
     </button>
   );
 }
@@ -65,8 +64,7 @@ function DownloadButton({ final = false }: { final?: boolean }) {
 function WatchButton({ subtle = false }: { subtle?: boolean }) {
   return (
     <a className={subtle ? "button button--ghost" : "button button--primary"} href={GITHUB_WATCH_URL} target="_blank" rel="noreferrer">
-      <span>Get notified on GitHub</span>
-      <small>Watch this repo</small>
+      <span>Get notified on GitHub</span> <small>Watch this repo</small>
     </a>
   );
 }
@@ -267,6 +265,20 @@ function FaqList() {
   );
 }
 
+function FaqStructuredData() {
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqItems.map(([question, answer]) => ({
+      "@type": "Question",
+      name: question,
+      acceptedAnswer: { "@type": "Answer", text: answer },
+    })),
+  };
+
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />;
+}
+
 function FeatureRow({ id, eyebrow, title, description, media, reverse = false }: { id?: string; eyebrow: string; title: ReactNode; description: string; media: ReactNode; reverse?: boolean }) {
   return (
     <section className={reverse ? "feature-row feature-row--reverse section" : "feature-row section"} id={id}>
@@ -277,6 +289,44 @@ function FeatureRow({ id, eyebrow, title, description, media, reverse = false }:
       </div>
       <div className="feature-row__media reveal">{media}</div>
     </section>
+  );
+}
+
+function SiteNav() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isMenuOpen]);
+
+  const closeMenu = () => setIsMenuOpen(false);
+
+  return (
+    <header className="nav-wrap">
+      <nav className="nav" aria-label="Main navigation">
+        <a href="#top" className="brand-link" aria-label="JPLearn home" onClick={closeMenu}><Logo /></a>
+        <div className={isMenuOpen ? "nav-links nav-links--open" : "nav-links"} id="nav-links">
+          <a href="#why" onClick={closeMenu}>Why JPLearn</a><a href="#how-it-works" onClick={closeMenu}>How it works</a><a href="#faq" onClick={closeMenu}>FAQ</a>
+          <a href={GITHUB_URL} target="_blank" rel="noreferrer" onClick={closeMenu}>GitHub</a>
+        </div>
+        <button
+          type="button"
+          className="nav-toggle"
+          aria-expanded={isMenuOpen}
+          aria-controls="nav-links"
+          aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+          onClick={() => setIsMenuOpen((open) => !open)}
+        >
+          <span />
+        </button>
+        <button className="nav-download" disabled><span>Download</span> <small>Soon</small></button>
+      </nav>
+    </header>
   );
 }
 
@@ -325,16 +375,7 @@ export default function Home() {
       <div className="washi-grain" aria-hidden="true" />
       <div className="page-progress" aria-hidden="true" />
       <a className="skip-link" href="#main">Skip to content</a>
-      <header className="nav-wrap">
-        <nav className="nav" aria-label="Main navigation">
-          <a href="#top" className="brand-link" aria-label="JPLearn home"><Logo /></a>
-          <div className="nav-links">
-            <a href="#why">Why JPLearn</a><a href="#how-it-works">How it works</a><a href="#faq">FAQ</a>
-            <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
-          </div>
-          <button className="nav-download" disabled><span>Download</span><small>Soon</small></button>
-        </nav>
-      </header>
+      <SiteNav />
 
       <main id="main">
         <section className="hero" id="top">
@@ -345,7 +386,7 @@ export default function Home() {
             <span className="hero-tategaki" lang="ja"><b>学びを、前へ。</b><small>毎日、少しずつ。</small></span>
           </div>
           <div className="hero-copy reveal is-visible">
-            <Image className="hero-logo" src="/jplearn-lockup.png" width={900} height={234} priority unoptimized alt="JPLearn" />
+            <Image className="hero-logo" src="/jplearn-lockup.png" width={800} height={208} priority unoptimized alt="JPLearn" />
             <span className="kicker"><i /> JAPANESE, WITH DIRECTION · 学びの道</span>
             <h1>Learn Japanese.<br /><em>Keep moving forward.</em></h1>
             <p>Lessons, reviews, games and handwriting practice—plus an AI tutor that runs locally on your machine, not in the cloud. One focused desktop app, not five browser tabs.</p>
@@ -420,6 +461,7 @@ export default function Home() {
             <h2>Questions worth<br />answering honestly.</h2>
           </div>
           <div className="reveal"><FaqList /></div>
+          <FaqStructuredData />
         </section>
 
         <section className="closing-section section" id="kickstarter">
@@ -429,7 +471,7 @@ export default function Home() {
             <p>JPLearn is developed in the open on GitHub. Watch the repo to see progress land, weigh in on platforms and features, and hear about the Kickstarter the moment it opens.</p>
             <div className="closing-actions">
               <WatchButton />
-              <button className="button button--ghost" disabled><span>View the Kickstarter</span><small>Coming soon</small></button>
+              <button className="button button--ghost" disabled><span>View the Kickstarter</span> <small>Coming soon</small></button>
             </div>
           </div>
         </section>
