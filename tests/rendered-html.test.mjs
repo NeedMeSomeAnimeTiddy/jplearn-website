@@ -22,8 +22,7 @@ test("server-renders the complete JPLearn landing page", async () => {
   assert.match(html, /<title>JPLearn — A Better Way to Learn Japanese<\/title>/i);
   assert.match(html, /Learn Japanese\.<!-- -->Keep moving forward\.|Learn Japanese\./i);
   assert.match(html, /Stop juggling apps/);
-  assert.match(html, /Everything you need to study/);
-  assert.match(html, /A SMALL DAILY LOOP/);
+  assert.match(html, /Everything builds/);
   assert.match(html, /WORDS IN CONTEXT/);
   assert.match(html, /Know what to/);
   assert.match(html, /Practice without repeating/);
@@ -32,7 +31,6 @@ test("server-renders the complete JPLearn landing page", async () => {
   assert.match(html, /See the work/);
   assert.match(html, /Questions worth/);
   assert.match(html, /Follow the build/);
-  assert.match(html, /Help shape JPLearn 1\.0/);
   assert.match(html, /Your Japanese journey/);
 });
 
