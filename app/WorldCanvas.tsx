@@ -514,18 +514,30 @@ export function WorldCanvas() {
       pointerX = event.clientX / window.innerWidth - 0.5;
       pointerY = event.clientY / window.innerHeight - 0.5;
     };
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (frame) {
+          window.cancelAnimationFrame(frame);
+          frame = 0;
+        }
+      } else if (!frame) {
+        frame = window.requestAnimationFrame(render);
+      }
+    };
 
     resize();
     updateSceneTarget();
     window.addEventListener("resize", resize);
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.addEventListener("visibilitychange", onVisibilityChange);
     frame = window.requestAnimationFrame(render);
 
     return () => {
       window.removeEventListener("resize", resize);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       if (frame) window.cancelAnimationFrame(frame);
       groups.forEach((group) => group.traverse((object) => {
         const fadeObject = object as FadeObject;

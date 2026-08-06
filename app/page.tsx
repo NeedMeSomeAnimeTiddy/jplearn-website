@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 const WorldCanvas = dynamic(() => import("./WorldCanvas").then((module) => module.WorldCanvas), { ssr: false });
 
 const GITHUB_URL = "https://github.com/NeedMeSomeAnimeTiddy/JPLearn";
+const GITHUB_WATCH_URL = `${GITHUB_URL}/subscription`;
 
 const studyAreas = [
   ["あ", "Hiragana"],
@@ -23,6 +24,21 @@ const practiceModes = [
   ["Listening", "Voice", "聞く"],
   ["Conversation", "Respond", "話す"],
 ];
+
+const whyCards = [
+  ["一", "One path, not five apps", "SRS, kanji, grammar, handwriting and games live in a single daily route instead of five separate tools with five separate logins."],
+  ["二", "Built for depth", "A structured curriculum from first hiragana to N5–N1, not a shallow set of tourist phrases."],
+  ["三", "Practice that adapts", "Reviews are scheduled per item with spaced repetition, so you spend time on what you're actually forgetting."],
+  ["四", "A tutor that stays local", "The optional AI tutor runs with a locally installed model — explanations work offline, and your study data stays on your device."],
+] as const;
+
+const faqItems = [
+  ["When does JPLearn launch?", "There's no fixed date yet. Watch the repository on GitHub for updates as development progresses — it's the most current source of truth right now."],
+  ["What platforms will it run on?", "JPLearn is being built for Windows first. Support for other platforms will depend on interest, so watching the repo helps that conversation."],
+  ["Will JPLearn be free?", "Pricing hasn't been decided yet. It'll be shared closer to launch — keeping daily study accessible is a goal, not an afterthought."],
+  ["Does the AI tutor need an internet connection?", "No. The tutor is optional and runs with a locally installed model on your own device, so explanations work offline and nothing about your study session leaves your machine."],
+  ["Is JPLearn open source?", "Yes — development happens in the open on GitHub under the Apache 2.0 license. Issues, progress, and source are all visible there."],
+] as const;
 
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
@@ -46,6 +62,15 @@ function DownloadButton({ final = false }: { final?: boolean }) {
   );
 }
 
+function WatchButton({ subtle = false }: { subtle?: boolean }) {
+  return (
+    <a className={subtle ? "button button--ghost" : "button button--primary"} href={GITHUB_WATCH_URL} target="_blank" rel="noreferrer">
+      <span>Get notified on GitHub</span>
+      <small>Watch this repo</small>
+    </a>
+  );
+}
+
 function GithubLink({ quiet = false }: { quiet?: boolean }) {
   return (
     <a className={quiet ? "text-link" : "button button--ghost"} href={GITHUB_URL} target="_blank" rel="noreferrer">
@@ -56,11 +81,13 @@ function GithubLink({ quiet = false }: { quiet?: boolean }) {
 
 function ChapterRail() {
   const chapters = [
-    ["01", "庭", "Garden", "features"],
-    ["02", "縁", "Rhythm", "how-it-works"],
-    ["03", "遊", "Play", "practice"],
-    ["04", "積", "Growth", "progress"],
-    ["05", "次", "Back", "kickstarter"],
+    ["01", "由", "Why", "why"],
+    ["02", "庭", "Garden", "features"],
+    ["03", "縁", "Rhythm", "how-it-works"],
+    ["04", "遊", "Play", "practice"],
+    ["05", "積", "Growth", "progress"],
+    ["06", "問", "Answers", "faq"],
+    ["07", "次", "Back", "kickstarter"],
   ];
 
   return (
@@ -302,6 +329,33 @@ function ProgressScroll() {
   );
 }
 
+function WhyGrid() {
+  return (
+    <div className="why-grid" aria-label="Reasons JPLearn is one app instead of several">
+      {whyCards.map(([mark, title, body]) => (
+        <article className="why-card" key={title}>
+          <span className="why-card__mark" lang="ja" aria-hidden="true">{mark}</span>
+          <h3>{title}</h3>
+          <p>{body}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function FaqList() {
+  return (
+    <div className="faq-list">
+      {faqItems.map(([question, answer]) => (
+        <details className="faq-item" key={question}>
+          <summary><span>{question}</span><i aria-hidden="true" /></summary>
+          <p>{answer}</p>
+        </details>
+      ))}
+    </div>
+  );
+}
+
 export default function Home() {
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -360,7 +414,7 @@ export default function Home() {
         <nav className="nav" aria-label="Main navigation">
           <a href="#top" className="brand-link" aria-label="JPLearn home"><Logo /></a>
           <div className="nav-links">
-            <a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="#kickstarter">Kickstarter</a>
+            <a href="#why">Why JPLearn</a><a href="#features">Features</a><a href="#faq">FAQ</a>
             <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
           </div>
           <button className="nav-download" disabled><span>Download</span><small>Soon</small></button>
@@ -382,8 +436,8 @@ export default function Home() {
             <Image className="hero-logo" src="/jplearn-lockup.png" width={900} height={234} priority unoptimized alt="JPLearn" />
             <span className="kicker"><i /> JAPANESE, WITH DIRECTION · 学びの道</span>
             <h1>Learn Japanese.<br /><em>Keep moving forward.</em></h1>
-            <p>Lessons, reviews, games, handwriting and an AI tutor—all in one focused desktop app.</p>
-            <div className="hero-actions"><DownloadButton /><GithubLink /></div>
+            <p>Lessons, reviews, games and handwriting practice—plus an AI tutor that runs locally on your machine, not in the cloud. One focused desktop app, not five browser tabs.</p>
+            <div className="hero-actions"><WatchButton /><GithubLink /></div>
             <HeroSignals />
           </div>
           <div className="hero-stage" aria-label="A dimensional preview of the JPLearn desktop application">
@@ -396,8 +450,18 @@ export default function Home() {
           <div className="scroll-cue" aria-hidden="true"><span>SCROLL TO STUDY</span><i /></div>
         </section>
 
+        <section className="why-section section" id="why" data-scene="home">
+          <ChapterMark number="一" kanji="由" phrase="ひとつの理由" />
+          <div className="section-heading section-heading--center reveal">
+            <span className="eyebrow">WHY ONE APP · 由</span>
+            <h2>Stop juggling apps.<br /><em>Start finishing lessons.</em></h2>
+            <p className="why-lede">Most learners end up stitching together a flashcard app, a kanji app, a grammar tool and a conversation partner. JPLearn puts the whole loop in one place.</p>
+          </div>
+          <div className="reveal"><WhyGrid /></div>
+        </section>
+
         <section className="path-section section" id="features" data-scene="path">
-          <ChapterMark number="一" kanji="道" phrase="ひとつの道" />
+          <ChapterMark number="二" kanji="道" phrase="ひとつの道" />
           <div className="section-heading section-heading--center reveal">
             <span className="eyebrow">ONE APP · ONE PATH</span>
             <h2>Everything you need to study.<br /><em>Nothing pulling you away.</em></h2>
@@ -407,7 +471,7 @@ export default function Home() {
         </section>
 
         <section className="adaptive-section section" id="how-it-works" data-scene="route">
-          <ChapterMark number="二" kanji="習" phrase="今日の一歩" />
+          <ChapterMark number="三" kanji="習" phrase="今日の一歩" />
           <div className="engawa-frame">
             <div className="engawa-eaves" aria-hidden="true"><i /><i /><i /><i /><i /></div>
             <div className="adaptive-sticky">
@@ -425,7 +489,7 @@ export default function Home() {
         </section>
 
         <section className="practice-section section" id="practice" data-scene="play">
-          <ChapterMark number="三" kanji="遊" phrase="遊んで覚える" light />
+          <ChapterMark number="四" kanji="遊" phrase="遊んで覚える" light />
           <div className="practice-title reveal">
             <span className="eyebrow eyebrow--light">PRACTICE THROUGH PLAY · 遊ぶ</span>
             <h2>Practice without repeating<br />the same screen.</h2>
@@ -435,7 +499,7 @@ export default function Home() {
         </section>
 
         <section className="handwriting-section section" data-scene="write">
-          <ChapterMark number="四" kanji="書" phrase="一画ずつ" />
+          <ChapterMark number="五" kanji="書" phrase="一画ずつ" />
           <div className="handwriting-copy reveal">
             <span className="eyebrow">HANDWRITING · 書道</span>
             <h2>Learn how Japanese<br />is written.</h2>
@@ -445,7 +509,7 @@ export default function Home() {
         </section>
 
         <section className="tutor-section section" data-scene="tutor">
-          <ChapterMark number="五" kanji="話" phrase="迷ったときに" light />
+          <ChapterMark number="六" kanji="話" phrase="迷ったときに" light />
           <div className="local-orbit" aria-hidden="true"><i /><i /><span>LOCAL</span></div>
           <div className="tutor-copy reveal">
             <span className="eyebrow eyebrow--light">QUIET HELP · 問う</span>
@@ -458,7 +522,7 @@ export default function Home() {
         </section>
 
         <section className="progress-section section" id="progress" data-scene="progress">
-          <ChapterMark number="六" kanji="積" phrase="積み重ね" />
+          <ChapterMark number="七" kanji="積" phrase="積み重ね" />
           <div className="progress-copy reveal">
             <span className="eyebrow">PROGRESS · 積み重ね</span>
             <h2>See the work<br />adding up.</h2>
@@ -467,8 +531,27 @@ export default function Home() {
           <div className="reveal"><ProgressScroll /></div>
         </section>
 
+        <section className="faq-section section" id="faq" data-scene="progress">
+          <ChapterMark number="八" kanji="問" phrase="よくある質問" />
+          <div className="section-heading section-heading--center reveal">
+            <span className="eyebrow">BEFORE YOU ASK · 問</span>
+            <h2>Questions worth<br />answering honestly.</h2>
+          </div>
+          <div className="reveal"><FaqList /></div>
+        </section>
+
+        <section className="community-section section" data-scene="back">
+          <ChapterMark number="九" kanji="集" phrase="共に歩む" />
+          <div className="community-copy reveal">
+            <span className="eyebrow">BUILT IN THE OPEN · 集まる</span>
+            <h2>Follow the build,<br />chapter by chapter.</h2>
+            <p>JPLearn is developed in the open on GitHub. Watch the repo to see progress land, weigh in on platforms and features, and hear about the Kickstarter the moment it opens.</p>
+            <div className="community-actions"><WatchButton subtle /></div>
+          </div>
+        </section>
+
         <section className="kickstarter-section" id="kickstarter" data-scene="back">
-          <ChapterMark number="七" kanji="次" phrase="次の章へ" />
+          <ChapterMark number="十" kanji="次" phrase="次の章へ" />
           <div className="kickstarter-paper reveal">
             <span className="paper-binding" aria-hidden="true"><i /><i /><i /><i /><i /></span>
             <span className="paper-fold paper-fold--one" aria-hidden="true" /><span className="paper-fold paper-fold--two" aria-hidden="true" />
@@ -476,7 +559,7 @@ export default function Home() {
             <h2>Help shape JPLearn 1.0.</h2>
             <p>Support the final development, join the backer beta, and help bring the complete release to life.</p>
             <button className="button button--ink" disabled>View the Kickstarter</button>
-            <small className="placeholder-note">Campaign link coming soon</small>
+            <small className="placeholder-note">Campaign link coming soon — watch the repo to hear first.</small>
           </div>
         </section>
 
@@ -488,7 +571,7 @@ export default function Home() {
             <Logo />
             <span className="eyebrow eyebrow--light">ONE FOCUSED PLACE</span>
             <h2>Your Japanese journey,<br /><em>in one place.</em></h2>
-            <div className="final-actions"><DownloadButton final /><GithubLink /></div>
+            <div className="final-actions"><WatchButton /><DownloadButton final /></div>
           </div>
         </section>
       </main>
