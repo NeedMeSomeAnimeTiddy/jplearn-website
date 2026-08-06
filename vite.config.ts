@@ -47,6 +47,13 @@ export default defineConfig(async () => {
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
+    build: {
+      // WorldCanvas is already isolated via next/dynamic({ ssr: false }), so it
+      // ships as its own client-only chunk. Its size comes from three.js's
+      // WebGLRenderer core, which doesn't shrink with tree-shaking — raise the
+      // warning limit rather than chase an unreachable target.
+      chunkSizeWarningLimit: 600,
+    },
     plugins: [
       vinext(),
       sites(),
