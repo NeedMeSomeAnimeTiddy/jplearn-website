@@ -123,8 +123,14 @@ function makeRockIsland(radius: number, far = false) {
   const rock = new THREE.Mesh(rockGeometry, far ? M.rockFar() : M.rock());
   rock.position.y = -radius * 0.24;
   island.add(rock);
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.94, radius, radius * 0.14, 9), M.grassTop());
+  // turf cap (top stays at +0.07r — prop placement depends on it), welded to
+  // the rock by a shoulder so no sky shows between grass and stone
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.94, radius, radius * 0.16, 9), M.grassTop());
+  top.position.y = -radius * 0.01;
   island.add(top);
+  const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 0.8, radius * 0.3, 9), far ? M.rockFar() : M.rock());
+  shoulder.position.y = -radius * 0.22;
+  island.add(shoulder);
   return island;
 }
 
@@ -350,31 +356,42 @@ function makeSign(glyph: string, faceAngle: number) {
   return sign;
 }
 
-function makeTaikoBridge() {
+/* A red arched bridge built in world space between two landing points —
+   the deck follows one curve, so both feet always sit on their islands. */
+function makeBridge(from: THREE.Vector3, to: THREE.Vector3, bow: number) {
   const bridge = new THREE.Group();
   const plankMaterial = M.wood();
   const rail = M.redDark();
-  const span = 2.6;
-  const planks = 9;
+  const mid = from.clone().lerp(to, 0.5);
+  mid.y = Math.max(from.y, to.y) + bow;
+  const deck = new THREE.QuadraticBezierCurve3(from, mid, to);
+
+  const planks = 11;
+  const dummy = new THREE.Object3D();
+  const tangentTarget = new THREE.Vector3();
   for (let index = 0; index < planks; index += 1) {
     const t = index / (planks - 1);
-    const x = (t - 0.5) * span;
-    const y = Math.sin(t * Math.PI) * 0.42;
-    const plank = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.055, 0.7), plankMaterial);
-    plank.position.set(x, y, 0);
-    plank.rotation.z = Math.cos(t * Math.PI) * -0.42;
+    const point = deck.getPoint(t);
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.055, 0.3), plankMaterial);
+    dummy.position.copy(point);
+    tangentTarget.copy(point).add(deck.getTangent(t));
+    dummy.lookAt(tangentTarget);
+    plank.position.copy(dummy.position);
+    plank.quaternion.copy(dummy.quaternion);
     bridge.add(plank);
   }
-  [[-1, 0.34], [1, 0.34]].forEach(([side]) => {
-    const railCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-span / 2, 0.32, side * 0.32),
-      new THREE.Vector3(0, 0.78, side * 0.32),
-      new THREE.Vector3(span / 2, 0.32, side * 0.32),
-    ]);
-    bridge.add(new THREE.Mesh(new THREE.TubeGeometry(railCurve, 10, 0.03, 5, false), rail));
-    [-span / 2, 0, span / 2].forEach((x) => {
+
+  const across = new THREE.Vector3(to.z - from.z, 0, from.x - to.x).normalize().multiplyScalar(0.33);
+  [1, -1].forEach((side) => {
+    const railPoints = [0, 0.25, 0.5, 0.75, 1].map((t) => {
+      const point = deck.getPoint(t);
+      return point.addScaledVector(across, side).add(new THREE.Vector3(0, 0.34, 0));
+    });
+    bridge.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPoints), 16, 0.03, 5, false), rail));
+    [0, 0.5, 1].forEach((t) => {
+      const foot = deck.getPoint(t).addScaledVector(across, side);
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.36, 5), rail);
-      post.position.set(x, Math.sin(((x / span) + 0.5) * Math.PI) * 0.42 + 0.16, side * 0.32);
+      post.position.copy(foot).add(new THREE.Vector3(0, 0.17, 0));
       bridge.add(post);
     });
   });
@@ -630,20 +647,18 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     world.add(lantern);
   });
 
-  /* west islet with the taiko bridge and a maple */
+  /* west islet — moved clear of the main island so the crossing is real */
   const islet = makeRockIsland(2);
-  islet.position.set(-7.7, -0.55, 2.4);
+  islet.position.set(-9.2, -0.75, 3);
   world.add(islet);
   const isletMaple = makeBlossomTree(M.maple(), 0.9);
-  isletMaple.position.set(-8.1, -0.42, 2);
+  isletMaple.position.set(-9.7, -0.63, 2.6);
   const isletLantern = makeStoneLantern(glow, 0.8);
-  isletLantern.position.set(-7, -0.42, 3);
+  isletLantern.position.set(-8.5, -0.63, 3.7);
   world.add(isletMaple, isletLantern);
 
-  const bridge = makeTaikoBridge();
-  bridge.position.set(-5.85, 0.25, 2.1);
-  bridge.rotation.y = 0.18;
-  bridge.rotation.z = -0.06;
+  /* the bridge spans grass edge to islet surface — feet on both islands */
+  const bridge = makeBridge(new THREE.Vector3(-5.6, 0.43, 1.83), new THREE.Vector3(-7.65, -0.58, 2.5), 0.5);
   world.add(bridge);
 
   /* grass, rocks, drifting pebbles (instanced) */
@@ -1151,6 +1166,13 @@ export function WorldScene() {
         renderer.setSize(width, height, false);
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
+      },
+      look: (px: number, py: number, pz: number, tx: number, ty: number, tz: number) => {
+        desiredPosition.set(px, py, pz);
+        desiredTarget.set(tx, ty, tz);
+        camera.position.copy(desiredPosition);
+        currentTarget.copy(desiredTarget);
+        camera.lookAt(currentTarget);
       },
     };
     (window as unknown as { __nightflight?: typeof devHook }).__nightflight = devHook;
