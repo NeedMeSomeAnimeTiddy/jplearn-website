@@ -33,6 +33,18 @@ const FLIGHT: FlightPoint[] = [
 
 const TRACK_GLYPHS = ["あ", "カ", "漢", "語", "文", "読"];
 
+/* deterministic PRNG so scatters stay identical between visits */
+function mulberry32(seed: number) {
+  let state = seed;
+  return () => {
+    state |= 0;
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function glowTexture(inner: string, outer: string) {
   const canvas = document.createElement("canvas");
   canvas.width = 64;
@@ -423,6 +435,37 @@ function makeTsukubai() {
   return basin;
 }
 
+function makeMoon(radius: number) {
+  const geometry = new THREE.IcosahedronGeometry(radius, 2);
+  const positions = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const vertex = new THREE.Vector3();
+  const direction = new THREE.Vector3();
+  const random = mulberry32(7);
+  const craters = Array.from({ length: 11 }, () => ({
+    direction: new THREE.Vector3(random() * 2 - 1, random() * 2 - 1, random() * 2 - 1).normalize(),
+    size: 0.22 + random() * 0.38,
+    depth: 0.025 + random() * 0.05,
+  }));
+  for (let index = 0; index < positions.count; index += 1) {
+    vertex.fromBufferAttribute(positions, index);
+    direction.copy(vertex).normalize();
+    let offset = 0;
+    craters.forEach((crater) => {
+      const angle = direction.angleTo(crater.direction);
+      if (angle < crater.size) offset -= Math.cos((angle / crater.size) * Math.PI * 0.5) * crater.depth;
+    });
+    vertex.setLength(radius * (1 + offset));
+    positions.setXYZ(index, vertex.x, vertex.y, vertex.z);
+  }
+  geometry.computeVertexNormals();
+  // fog: false — the moon sits above the atmosphere, so it stays crisp
+  const moon = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({
+    color: 0xf6e7c8, emissive: 0xc7ae82, flatShading: true, fog: false,
+  }));
+  moon.rotation.z = 0.25;
+  return moon;
+}
+
 function makeCloud(scale: number, flat = false) {
   const cloud = new THREE.Group();
   const material = new THREE.MeshLambertMaterial({ color: 0x6a5a9e, transparent: true, opacity: flat ? 0.38 : 0.5, flatShading: true });
@@ -437,18 +480,42 @@ function makeCloud(scale: number, flat = false) {
   return cloud;
 }
 
-function makePoints(count: number, spread: Vec3, center: Vec3, color: number, size: number, texture: THREE.Texture, opacity = 0.9) {
+function makePoints(count: number, spread: Vec3, center: Vec3, color: number, size: number, texture: THREE.Texture, opacity = 0.9, seed = 1, fog = true) {
+  const random = mulberry32(seed);
   const positions = new Float32Array(count * 3);
   for (let index = 0; index < count; index += 1) {
-    positions[index * 3] = center[0] + (((index * 37) % 101) / 100 - 0.5) * spread[0];
-    positions[index * 3 + 1] = center[1] + (((index * 61) % 97) / 96 - 0.5) * spread[1];
-    positions[index * 3 + 2] = center[2] + (((index * 17) % 89) / 88 - 0.5) * spread[2];
+    positions[index * 3] = center[0] + (random() - 0.5) * spread[0];
+    positions[index * 3 + 1] = center[1] + (random() - 0.5) * spread[1];
+    positions[index * 3 + 2] = center[2] + (random() - 0.5) * spread[2];
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const material = new THREE.PointsMaterial({
     color, size, map: texture, transparent: true, opacity,
-    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true, fog,
+  });
+  return new THREE.Points(geometry, material);
+}
+
+/* stars on a spherical shell around the scene, so every view direction is
+   equally dense; slight below-horizon spill keeps low shots starry too */
+function makeStarShell(count: number, radiusMin: number, radiusMax: number, color: number, size: number, texture: THREE.Texture, opacity: number, seed: number) {
+  const random = mulberry32(seed);
+  const positions = new Float32Array(count * 3);
+  for (let index = 0; index < count; index += 1) {
+    const y = -0.08 + 1.08 * random();
+    const theta = random() * Math.PI * 2;
+    const horizontal = Math.sqrt(Math.max(0, 1 - y * y));
+    const radius = radiusMin + random() * (radiusMax - radiusMin);
+    positions[index * 3] = Math.cos(theta) * horizontal * radius;
+    positions[index * 3 + 1] = 8 + y * radius;
+    positions[index * 3 + 2] = -15 + Math.sin(theta) * horizontal * radius;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    color, size, map: texture, transparent: true, opacity,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true, fog: false,
   });
   return new THREE.Points(geometry, material);
 }
@@ -782,7 +849,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   const starGeometry = new THREE.BufferGeometry();
   starGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(starSpots.flat()), 3));
   const constellationStars = new THREE.Points(starGeometry, new THREE.PointsMaterial({
-    color: 0xffe9c7, size: 1.8, map: soft, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending,
+    color: 0xffe9c7, size: 1.8, map: soft, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
   }));
   const linkPositions: number[] = [];
   linkPairs.forEach(([a, b]) => linkPositions.push(...starSpots[a], ...starSpots[b]));
@@ -792,11 +859,11 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   constellation.add(constellationStars, constellationLines);
   world.add(constellation);
 
-  /* moon + halo */
-  const moon = new THREE.Mesh(new THREE.CircleGeometry(7, 40), new THREE.MeshBasicMaterial({ color: 0xf6e7c8 }));
+  /* a real moon — cratered, lit, slowly turning */
+  const moon = makeMoon(7);
   moon.position.set(-34, 30, -80);
   const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xf6e7c8, transparent: true, opacity: 0.4, depthWrite: false }));
-  moonHalo.scale.setScalar(30);
+  moonHalo.scale.setScalar(32);
   moonHalo.position.copy(moon.position);
   world.add(moon, moonHalo);
 
@@ -809,11 +876,13 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   mistB.position.set(-13, 0, -14);
   world.add(mistA, mistB);
 
-  /* ambient particles */
-  const stars = makePoints(340, [220, 100, 130], [0, 46, -60], 0xffffff, 0.5, soft, 0.8);
-  const fireflies = makePoints(70, [26, 9, 24], [-4, 3.5, -4], 0xffd27e, 0.42, glow, 0.85);
-  const petals = makePoints(90, [26, 14, 22], [3, 5, -1], 0xf2a7c3, 0.3, soft, 0.65);
-  world.add(stars, fireflies, petals);
+  /* ambient particles — a three-layer star dome, fog-exempt like the moon */
+  const stars = makeStarShell(2600, 115, 165, 0xffffff, 1.15, soft, 0.9, 11);
+  const starsFine = makeStarShell(2000, 130, 185, 0xcfd8ff, 0.8, soft, 0.6, 23);
+  const starsBright = makeStarShell(130, 110, 150, 0xfff2d8, 2.2, soft, 0.95, 37);
+  const fireflies = makePoints(70, [26, 9, 24], [-4, 3.5, -4], 0xffd27e, 0.42, glow, 0.85, 51);
+  const petals = makePoints(90, [26, 14, 22], [3, 5, -1], 0xf2a7c3, 0.3, soft, 0.65, 67);
+  world.add(stars, starsFine, starsBright, fireflies, petals);
 
   /* shooting stars */
   const streaks = [0, 1].map(() => {
@@ -826,7 +895,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     return streak;
   });
 
-  return { world, lanterns, stars, fireflies, petals, streaks, orbitCards, pebbles, constellationStars };
+  return { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon };
 }
 
 type StreakState = { active: boolean; life: number; nextAt: number; velocity: THREE.Vector3 };
@@ -859,7 +928,7 @@ export function WorldScene() {
 
     const glow = glowTexture("rgba(255,220,170,1)", "rgba(255,160,80,0.35)");
     const soft = glowTexture("rgba(255,255,255,1)", "rgba(255,255,255,0.3)");
-    const { world, lanterns, stars, fireflies, petals, streaks, orbitCards, pebbles, constellationStars } = buildWorld(glow, soft);
+    const { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon } = buildWorld(glow, soft);
     scene.add(world);
 
     const sky = document.querySelector<HTMLElement>(".w-sky");
@@ -967,8 +1036,11 @@ export function WorldScene() {
         fireflies.rotation.y = time * 0.02;
         (fireflies.material as THREE.PointsMaterial).opacity = 0.62 + Math.sin(time * 1.3) * 0.22;
         (stars.material as THREE.PointsMaterial).opacity = 0.72 + Math.sin(time * 0.6) * 0.1;
+        (starsFine.material as THREE.PointsMaterial).opacity = 0.48 + Math.sin(time * 0.45 + 2) * 0.12;
+        (starsBright.material as THREE.PointsMaterial).opacity = 0.78 + Math.sin(time * 0.9 + 4) * 0.16;
         (constellationStars.material as THREE.PointsMaterial).opacity = 0.8 + Math.sin(time * 1.1) * 0.18;
         pebbles.rotation.y = time * 0.012;
+        moon.rotation.y = time * 0.018;
 
         orbitCards.forEach((card) => placeOrbitCard(card, time));
 
