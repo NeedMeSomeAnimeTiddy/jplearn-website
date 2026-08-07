@@ -19,10 +19,10 @@ const FLIGHT: FlightPoint[] = [
   { p: [0, 2.15, 10], t: [0, 1.9, 4.4] },                    //   locked approach to the torii
   { p: [0.2, 1.9, 3.1], t: [-0.4, 1.15, -3.1], stop: true }, // 1 threshold — shrine left of frame
   { p: [4.8, 3.6, 5.5], t: [7, 1, -8] },                     //   swing right over the garden
-  { p: [5.2, 4.4, 4.5], t: [13, -0.5, -22], stop: true },    // 2 the route — chain recedes right
+  { p: [5.2, 4.4, 4.5], t: [11.5, -0.5, -22], stop: true },  // 2 the route — chain recedes right
   { p: [-0.5, 5.6, 6.5], t: [-7, 2.5, -8] },                 //   arc back high across the island
   { p: [-8.8, 3.5, -8.2], t: [-15.5, 4.2, -14.5], stop: true }, // 3 lanterns — field left of frame
-  { p: [-11.5, 7.6, -15], t: [-17.5, 10.2, -24.5], stop: true }, // 4 memory — orrery upper right
+  { p: [-16, 7.2, -5], t: [-25, 11.2, 5], stop: true },         // 4 memory — orrery in open sky, upper right
   { p: [-7.5, 4, 1.5], t: [-2.4, 1.4, -2.4] },               //   descend around the west islet
   { p: [1.9, 1.8, 0.7], t: [-1.5, 1.3, -3.5], stop: true },  // 5 tutor — shrine and maple left
   { p: [3.5, 7.5, 4], t: [-4, 13, -25] },                    //   spiral ascent
@@ -100,7 +100,7 @@ const M = {
   gold: () => new THREE.MeshLambertMaterial({ color: 0xc9a15a, flatShading: true }),
   warm: () => new THREE.MeshBasicMaterial({ color: 0xffb45e }),
   paper: () => new THREE.MeshBasicMaterial({ color: 0xffd9a0 }),
-  white: () => new THREE.MeshBasicMaterial({ color: 0xf3ecff }),
+  white: () => new THREE.MeshBasicMaterial({ color: 0xf3ecff, side: THREE.DoubleSide }),
 };
 
 /* ---------- builders ---------- */
@@ -303,7 +303,7 @@ function makeStele(glyph: string) {
   stone.position.y = 0.75;
   const face = new THREE.Mesh(
     new THREE.PlaneGeometry(0.44, 0.44),
-    new THREE.MeshBasicMaterial({ map: glyphTexture(glyph, "#ffd9a0"), transparent: true }),
+    new THREE.MeshBasicMaterial({ map: glyphTexture(glyph, "#ffd9a0"), transparent: true, side: THREE.DoubleSide }),
   );
   face.position.set(0, 0.85, 0.135);
   stele.add(plinth, stone, face);
@@ -341,7 +341,7 @@ function makeSign(glyph: string, faceAngle: number) {
   board.position.y = 0.85;
   const face = new THREE.Mesh(
     new THREE.PlaneGeometry(0.5, 0.5),
-    new THREE.MeshBasicMaterial({ map: glyphTexture(glyph), transparent: true }),
+    new THREE.MeshBasicMaterial({ map: glyphTexture(glyph), transparent: true, side: THREE.DoubleSide }),
   );
   face.position.set(0, 0.85, 0.035);
   sign.add(board, face);
@@ -393,7 +393,7 @@ function makeEmaBoard() {
   const roof = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 0.3), M.roof());
   roof.position.y = 1.06;
   board.add(beam, roof);
-  const emaMaterial = new THREE.MeshLambertMaterial({ color: 0xe8d9b8 });
+  const emaMaterial = new THREE.MeshLambertMaterial({ color: 0xe8d9b8, side: THREE.DoubleSide });
   for (let index = 0; index < 6; index += 1) {
     const ema = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.13), emaMaterial);
     ema.position.set(-0.42 + (index % 3) * 0.42, 0.78 - Math.floor(index / 3) * 0.2, 0.02);
@@ -634,9 +634,9 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   islet.position.set(-7.7, -0.55, 2.4);
   world.add(islet);
   const isletMaple = makeBlossomTree(M.maple(), 0.9);
-  isletMaple.position.set(-8.1, -0.27, 2);
+  isletMaple.position.set(-8.1, -0.42, 2);
   const isletLantern = makeStoneLantern(glow, 0.8);
-  isletLantern.position.set(-7, -0.27, 3);
+  isletLantern.position.set(-7, -0.42, 3);
   world.add(isletMaple, isletLantern);
 
   const bridge = makeTaikoBridge();
@@ -674,15 +674,15 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   });
   world.add(rocks);
 
-  const pebbles = new THREE.InstancedMesh(new THREE.TetrahedronGeometry(0.11, 0), new THREE.MeshLambertMaterial({ color: 0x55467e, flatShading: true }), 26);
-  scatterInstances(pebbles, 26, (index, dummy) => {
+  const pebbles = new THREE.InstancedMesh(new THREE.TetrahedronGeometry(0.11, 0), new THREE.MeshLambertMaterial({ color: 0x3f3468, flatShading: true }), 14);
+  scatterInstances(pebbles, 14, (index, dummy) => {
     dummy.position.set(
       -6 + (((index * 43) % 37) / 36 - 0.5) * 44,
-      1.5 + (((index * 29) % 23) / 22 - 0.5) * 10,
-      -8 + (((index * 17) % 31) / 30 - 0.5) * 40,
+      0.6 + (((index * 29) % 23) / 22 - 0.5) * 7,
+      -10 + (((index * 17) % 31) / 30 - 0.5) * 36,
     );
     dummy.rotation.set(index * 1.3, index * 0.7, index * 0.4);
-    dummy.scale.setScalar(0.5 + (index % 5) / 5);
+    dummy.scale.setScalar(0.3 + (index % 5) / 10);
   });
   world.add(pebbles);
 
@@ -702,11 +702,13 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     const rock = makeRockIsland(radius, true);
     rock.position.set(x, y, z);
     world.add(rock);
-    routeAnchors.push(new THREE.Vector3(x, y + 0.4, z));
+    // the grassy top sits at radius * 0.07 above the island origin
+    const surface = y + radius * 0.07;
+    routeAnchors.push(new THREE.Vector3(x, surface + 0.3, z));
 
     const signAngle = Math.atan2(stop2Camera.x - x, stop2Camera.z - z);
     const sign = makeSign(TRACK_GLYPHS[index], signAngle);
-    sign.position.set(x - radius * 0.35, y + 0.34, z + radius * 0.45);
+    sign.position.set(x - radius * 0.35, surface - 0.02, z + radius * 0.45);
     world.add(sign);
 
     let landmark: THREE.Object3D;
@@ -716,7 +718,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     else if (index === 3) { landmark = new THREE.Group(); [[-0.4, 0.8], [0.35, 1.05], [0, 0.6]].forEach(([px, s]) => { const pine = makePine(s); pine.position.set(px, 0, px * 0.5); landmark.add(pine); }); }
     else if (index === 4) { landmark = makeBellTower(); }
     else { landmark = makeShrine(0.55); landmark.rotation.y = signAngle; }
-    landmark.position.set(x + radius * 0.2, y + 0.34, z - radius * 0.2);
+    landmark.position.set(x + radius * 0.2, surface - 0.02, z - radius * 0.2);
     world.add(landmark);
   });
 
@@ -761,9 +763,9 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   const poleTops: THREE.Vector3[] = [];
   [[-14.2, -10.3], [-11.8, -9.7]].forEach(([x, z]) => {
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 3.1, 6), poleMaterial);
-    pole.position.set(x, 2.9, z);
+    pole.position.set(x, 2.63, z); // base sunk just into the platform surface
     world.add(pole);
-    poleTops.push(new THREE.Vector3(x, 4.45, z));
+    poleTops.push(new THREE.Vector3(x, 4.18, z));
   });
 
   const stringAnchors: Array<[THREE.Vector3, THREE.Vector3]> = [
@@ -808,9 +810,10 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     lanterns.push(lantern);
   }
 
-  /* memory orrery — rings and orbiting cards around a warm core */
+  /* memory orrery — rings and orbiting cards in its own open sky,
+     well clear of the lantern festival */
   const orrery = new THREE.Group();
-  orrery.position.set(-14.6, 9.9, -22.8);
+  orrery.position.set(-25, 11, 1);
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), M.warm());
   const coreHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xffb45e, transparent: true, opacity: 0.7, depthWrite: false }));
   coreHalo.scale.setScalar(4);
@@ -843,6 +846,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   });
   const midCloudSpecs: Array<[number, number, number, number]> = [
     [-28, 10.5, -33, 2.6], [-2, 13, -36, 3.2], [14, 12, -30, 2.2], [24, 14, -44, 3.4], [-30, 12.5, -46, 2.4], [16, 17, -24, 2],
+    [-40, 14, 8, 2.6], [-34, 8.5, -9, 1.8],
   ];
   midCloudSpecs.forEach(([x, y, z, s]) => {
     const cloud = makeCloud(s);
@@ -977,7 +981,6 @@ export function WorldScene() {
       active: false, life: 0, nextAt: 3 + index * 5, velocity: new THREE.Vector3(),
     }));
 
-    let scrollProgress = 0;
     let pointerX = 0;
     let pointerY = 0;
     let frame = 0;
@@ -985,9 +988,25 @@ export function WorldScene() {
     let bank = 0;
     let previousCameraX = camera.position.x;
 
-    const readScroll = () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      scrollProgress = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+    /* The camera anchors to real section centres, so it rests exactly while
+       each section's pinned card is on screen, whatever the section heights. */
+    let sectionCenters: number[] = [];
+    const measureSections = () => {
+      const sections = Array.from(document.querySelectorAll<HTMLElement>("[data-stop]"));
+      if (sections.length < 2) return;
+      const viewport = window.innerHeight;
+      sectionCenters = sections.map((section) => section.offsetTop + section.offsetHeight / 2 - viewport / 2);
+    };
+    const scrollToU = () => {
+      if (sectionCenters.length < 2) return 0;
+      const y = window.scrollY;
+      let segment = 0;
+      while (segment < sectionCenters.length - 2 && y > sectionCenters[segment + 1]) segment += 1;
+      let f = (y - sectionCenters[segment]) / Math.max(1, sectionCenters[segment + 1] - sectionCenters[segment]);
+      f = (Math.min(1, Math.max(0, f)) - DWELL) / (1 - 2 * DWELL);
+      f = Math.min(1, Math.max(0, f));
+      f = f * f * (3 - 2 * f);
+      return stopU[segment] + (stopU[segment + 1] - stopU[segment]) * f;
     };
 
     const resize = () => {
@@ -1054,7 +1073,7 @@ export function WorldScene() {
       lastTime = time;
 
       if (!reducedMotion.matches) {
-        const u = progressToU(scrollProgress);
+        const u = scrollToU();
         positionCurve.getPoint(u, desiredPosition);
         targetCurve.getPoint(u, desiredTarget);
 
@@ -1127,10 +1146,15 @@ export function WorldScene() {
         renderer.render(scene, camera);
         return canvas;
       },
+      setSize: (width: number, height: number) => {
+        renderer.setPixelRatio(1);
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      },
     };
     (window as unknown as { __nightflight?: typeof devHook }).__nightflight = devHook;
 
-    const onScroll = () => readScroll();
     const onPointerMove = (event: PointerEvent) => {
       if (event.pointerType === "touch") return;
       pointerX = event.clientX / window.innerWidth - 0.5;
@@ -1150,16 +1174,17 @@ export function WorldScene() {
 
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(canvas);
+    const layoutObserver = new ResizeObserver(measureSections);
+    layoutObserver.observe(document.body);
     resize();
-    readScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
+    measureSections();
     window.addEventListener("pointermove", onPointerMove, { passive: true });
     document.addEventListener("visibilitychange", onVisibilityChange);
     frame = window.requestAnimationFrame(render);
 
     return () => {
       resizeObserver.disconnect();
-      window.removeEventListener("scroll", onScroll);
+      layoutObserver.disconnect();
       window.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       delete (window as unknown as { __nightflight?: unknown }).__nightflight;

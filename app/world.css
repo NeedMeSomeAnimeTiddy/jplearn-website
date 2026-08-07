@@ -102,13 +102,22 @@
 .w-btn--wait:hover { transform: none; box-shadow: none; }
 
 /* ---------- sections ---------- */
+/* Middle sections are tall, and their card pins near viewport centre while
+   the camera rests at that stop — reading time matches the flight's dwell. */
 .w-sec {
-  min-height: 118vh; display: flex; align-items: center;
-  padding: 100px clamp(18px, 5vw, 72px);
+  min-height: 155vh; display: flex; align-items: flex-start;
+  padding: 0 clamp(18px, 5vw, 72px) 12vh;
 }
 .w-sec--right { justify-content: flex-end; }
-.w-sec--hero { min-height: 100vh; position: relative; }
-.w-sec--final { justify-content: center; text-align: center; min-height: 100vh; }
+.w-sec .w-card { position: sticky; top: clamp(90px, 17vh, 240px); }
+.w-sec--hero {
+  min-height: 100vh; align-items: center; position: relative;
+  padding: 100px clamp(18px, 5vw, 72px);
+}
+.w-sec--final {
+  justify-content: center; align-items: center; text-align: center;
+  min-height: 100vh; padding: 100px clamp(18px, 5vw, 72px);
+}
 
 .w-hero { max-width: 620px; }
 .w-kicker {
