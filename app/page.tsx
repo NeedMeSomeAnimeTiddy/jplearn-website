@@ -68,8 +68,7 @@ export default function Home() {
 
       <header className="w-nav">
         <Link className="w-brand" href="/">
-          <Image src="/jplearn-icon.png" width={60} height={60} unoptimized alt="" />
-          <span>JPLearn</span>
+          <Image src="/jplearn-lockup-dark.png" width={1000} height={190} unoptimized alt="JPLearn" />
         </Link>
         <div className="w-nav-right">
           <a className="w-nav-link" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub ↗</a>

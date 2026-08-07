@@ -498,8 +498,9 @@ function makePoints(count: number, spread: Vec3, center: Vec3, color: number, si
 }
 
 /* stars on a spherical shell around the scene, so every view direction is
-   equally dense; slight below-horizon spill keeps low shots starry too */
-function makeStarShell(count: number, radiusMin: number, radiusMax: number, color: number, size: number, texture: THREE.Texture, opacity: number, seed: number) {
+   equally dense; slight below-horizon spill keeps low shots starry too.
+   `twinkle` > 0 gives every star its own brightness cycle via vertex colors */
+function makeStarShell(count: number, radiusMin: number, radiusMax: number, color: number, size: number, texture: THREE.Texture, opacity: number, seed: number, twinkle = 0) {
   const random = mulberry32(seed);
   const positions = new Float32Array(count * 3);
   for (let index = 0; index < count; index += 1) {
@@ -517,7 +518,18 @@ function makeStarShell(count: number, radiusMin: number, radiusMax: number, colo
     color, size, map: texture, transparent: true, opacity,
     depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true, fog: false,
   });
-  return new THREE.Points(geometry, material);
+  const points = new THREE.Points(geometry, material);
+  if (twinkle > 0) {
+    geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3));
+    material.vertexColors = true;
+    const twinkleRandom = mulberry32(seed + 1);
+    points.userData.twinkle = {
+      amp: twinkle,
+      phases: Float32Array.from({ length: count }, () => twinkleRandom() * Math.PI * 2),
+      speeds: Float32Array.from({ length: count }, () => 1.2 + twinkleRandom() * 3.4),
+    };
+  }
+  return points;
 }
 
 function scatterInstances(mesh: THREE.InstancedMesh, count: number, place: (index: number, dummy: THREE.Object3D) => void) {
@@ -877,9 +889,9 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   world.add(mistA, mistB);
 
   /* ambient particles — a three-layer star dome, fog-exempt like the moon */
-  const stars = makeStarShell(2600, 115, 165, 0xffffff, 1.15, soft, 0.9, 11);
+  const stars = makeStarShell(2600, 115, 165, 0xffffff, 1.3, soft, 1, 11, 0.75);
   const starsFine = makeStarShell(2000, 130, 185, 0xcfd8ff, 0.8, soft, 0.6, 23);
-  const starsBright = makeStarShell(130, 110, 150, 0xfff2d8, 2.2, soft, 0.95, 37);
+  const starsBright = makeStarShell(130, 110, 150, 0xfff2d8, 2.4, soft, 0.95, 37, 0.6);
   const fireflies = makePoints(70, [26, 9, 24], [-4, 3.5, -4], 0xffd27e, 0.42, glow, 0.85, 51);
   const petals = makePoints(90, [26, 14, 22], [3, 5, -1], 0xf2a7c3, 0.3, soft, 0.65, 67);
   world.add(stars, starsFine, starsBright, fireflies, petals);
@@ -1004,6 +1016,20 @@ export function WorldScene() {
       });
     };
 
+    const twinkleLayers = [stars, starsBright];
+    const updateTwinkle = (time: number) => {
+      twinkleLayers.forEach((layer) => {
+        const twinkle = layer.userData.twinkle as { amp: number; phases: Float32Array; speeds: Float32Array } | undefined;
+        if (!twinkle) return;
+        const colors = layer.geometry.getAttribute("color") as THREE.BufferAttribute;
+        for (let index = 0; index < twinkle.phases.length; index += 1) {
+          const level = 1 - twinkle.amp * (0.5 + 0.5 * Math.sin(time * twinkle.speeds[index] + twinkle.phases[index]));
+          colors.setXYZ(index, level, level, level);
+        }
+        colors.needsUpdate = true;
+      });
+    };
+
     const orbitAxis = new THREE.Vector3();
     const placeOrbitCard = (card: THREE.Mesh, time: number) => {
       const { radius, tiltX, tiltZ, angle, speed } = card.userData as { radius: number; tiltX: number; tiltZ: number; angle: number; speed: number };
@@ -1035,10 +1061,9 @@ export function WorldScene() {
         world.position.y = Math.sin(time * 0.4) * 0.12;
         fireflies.rotation.y = time * 0.02;
         (fireflies.material as THREE.PointsMaterial).opacity = 0.62 + Math.sin(time * 1.3) * 0.22;
-        (stars.material as THREE.PointsMaterial).opacity = 0.72 + Math.sin(time * 0.6) * 0.1;
-        (starsFine.material as THREE.PointsMaterial).opacity = 0.48 + Math.sin(time * 0.45 + 2) * 0.12;
-        (starsBright.material as THREE.PointsMaterial).opacity = 0.78 + Math.sin(time * 0.9 + 4) * 0.16;
-        (constellationStars.material as THREE.PointsMaterial).opacity = 0.8 + Math.sin(time * 1.1) * 0.18;
+        updateTwinkle(time);
+        (starsFine.material as THREE.PointsMaterial).opacity = 0.45 + Math.sin(time * 0.7 + 2) * 0.22;
+        (constellationStars.material as THREE.PointsMaterial).opacity = 0.72 + Math.sin(time * 1.4) * 0.26;
         pebbles.rotation.y = time * 0.012;
         moon.rotation.y = time * 0.018;
 
@@ -1087,7 +1112,11 @@ export function WorldScene() {
         currentTarget.copy(desiredTarget);
         camera.lookAt(currentTarget);
       },
-      snap: () => {
+      snap: (time = 0) => {
+        if (time > 0) {
+          updateTwinkle(time);
+          orbitCards.forEach((card) => placeOrbitCard(card, time));
+        }
         renderer.render(scene, camera);
         return canvas;
       },
