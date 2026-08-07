@@ -106,31 +106,50 @@ const M = {
 
 /* ---------- builders ---------- */
 
+/* One continuous mesh per island: the icosahedron's top is flattened into a
+   walkable plateau at exactly +0.07r (prop placement depends on it), the
+   keel stretches downward, and faces are vertex-colored — grass on top,
+   rock below — so turf and stone can never separate. */
 function makeRockIsland(radius: number, far = false) {
   const island = new THREE.Group();
-  const rockGeometry = new THREE.IcosahedronGeometry(radius, 1);
-  rockGeometry.scale(1, 1.15, 1);
-  const positions = rockGeometry.getAttribute("position") as THREE.BufferAttribute;
+  const geometry = new THREE.IcosahedronGeometry(radius, 2);
+  geometry.scale(1, 1.15, 1);
+  const positions = geometry.getAttribute("position") as THREE.BufferAttribute;
   const vertex = new THREE.Vector3();
+  const plateau = radius * 0.07;
   for (let index = 0; index < positions.count; index += 1) {
     vertex.fromBufferAttribute(positions, index);
-    if (vertex.y > 0) vertex.y *= 0.22;
-    const jitter = 1 + (Math.sin(vertex.x * 7.3 + vertex.z * 5.1) * 0.5 + Math.sin(vertex.y * 9.7) * 0.5) * 0.08;
-    vertex.multiplyScalar(jitter);
+    const height = vertex.y;
+    if (height > 0) vertex.y = Math.min(plateau, height * 0.25);
+    else vertex.y = height * 1.22; // deeper keel
+    // deterministic crags — a function of the original position, so the
+    // coincident copies in this non-indexed geometry always move together
+    const jitter = 1 + (Math.sin(vertex.x * 7.3 + vertex.z * 5.1) * 0.5 + Math.sin(height * 9.7) * 0.5) * 0.07;
+    if (vertex.y < plateau * 0.9) {
+      vertex.x *= jitter;
+      vertex.z *= jitter;
+      if (vertex.y < 0) vertex.y *= jitter;
+    }
     positions.setXYZ(index, vertex.x, vertex.y, vertex.z);
   }
-  rockGeometry.computeVertexNormals();
-  const rock = new THREE.Mesh(rockGeometry, far ? M.rockFar() : M.rock());
-  rock.position.y = -radius * 0.24;
-  island.add(rock);
-  // turf cap (top stays at +0.07r — prop placement depends on it), welded to
-  // the rock by a shoulder so no sky shows between grass and stone
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.94, radius, radius * 0.16, 9), M.grassTop());
-  top.position.y = -radius * 0.01;
-  island.add(top);
-  const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 0.8, radius * 0.3, 9), far ? M.rockFar() : M.rock());
-  shoulder.position.y = -radius * 0.22;
-  island.add(shoulder);
+  geometry.computeVertexNormals();
+
+  const grassA = new THREE.Color(0x35635c);
+  const grassB = new THREE.Color(0x3b6b60);
+  const rockA = new THREE.Color(far ? 0x362b5c : 0x3c3163);
+  const rockB = new THREE.Color(far ? 0x2e2450 : 0x342a57);
+  const colors = new Float32Array(positions.count * 3);
+  for (let face = 0; face < positions.count; face += 3) {
+    const centroidY = (positions.getY(face) + positions.getY(face + 1) + positions.getY(face + 2)) / 3;
+    const color = centroidY > plateau * 0.6 ? (face % 2 ? grassA : grassB) : (face % 3 ? rockA : rockB);
+    for (let corner = 0; corner < 3; corner += 1) {
+      colors[(face + corner) * 3] = color.r;
+      colors[(face + corner) * 3 + 1] = color.g;
+      colors[(face + corner) * 3 + 2] = color.b;
+    }
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  island.add(new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
   return island;
 }
 
@@ -705,7 +724,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   /* the route — six labeled curriculum islands, roped together */
   const routeSpecs: Array<{ pos: Vec3; radius: number }> = [
     { pos: [10.5, -0.7, -3], radius: 1.7 },
-    { pos: [15.5, 0.5, -9], radius: 1.5 },
+    { pos: [15.5, 0.5, -9], radius: 2.1 }, // roomier — the pagoda needs clearance from its sign
     { pos: [19.5, -0.5, -16], radius: 1.8 },
     { pos: [22.5, 0.7, -24], radius: 1.4 },
     { pos: [24.5, -0.3, -33], radius: 1.6 },
@@ -722,19 +741,29 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     const surface = y + radius * 0.07;
     routeAnchors.push(new THREE.Vector3(x, surface + 0.3, z));
 
-    const signAngle = Math.atan2(stop2Camera.x - x, stop2Camera.z - z);
+    /* the sign goes to the camera's left, the landmark to its right —
+       perpendicular to the stop-2 view axis, so they never stack up */
+    const toCamera = new THREE.Vector3(stop2Camera.x - x, 0, stop2Camera.z - z).normalize();
+    const side = new THREE.Vector3(-toCamera.z, 0, toCamera.x);
+    const signX = x + toCamera.x * radius * 0.25 + side.x * radius * 0.55;
+    const signZ = z + toCamera.z * radius * 0.25 + side.z * radius * 0.55;
+    const signAngle = Math.atan2(stop2Camera.x - signX, stop2Camera.z - signZ);
     const sign = makeSign(TRACK_GLYPHS[index], signAngle);
-    sign.position.set(x - radius * 0.35, surface - 0.02, z + radius * 0.45);
+    sign.position.set(signX, surface - 0.02, signZ);
     world.add(sign);
 
     let landmark: THREE.Object3D;
     if (index === 0) { landmark = makeTorii(0.55); landmark.rotation.y = signAngle; }
-    else if (index === 1) { landmark = makePagoda(); }
+    else if (index === 1) { landmark = makePagoda(); landmark.scale.setScalar(0.85); }
     else if (index === 2) { landmark = makeStele("道"); landmark.rotation.y = signAngle; }
     else if (index === 3) { landmark = new THREE.Group(); [[-0.4, 0.8], [0.35, 1.05], [0, 0.6]].forEach(([px, s]) => { const pine = makePine(s); pine.position.set(px, 0, px * 0.5); landmark.add(pine); }); }
     else if (index === 4) { landmark = makeBellTower(); }
     else { landmark = makeShrine(0.55); landmark.rotation.y = signAngle; }
-    landmark.position.set(x + radius * 0.2, surface - 0.02, z - radius * 0.2);
+    landmark.position.set(
+      x - side.x * radius * 0.35 - toCamera.x * radius * 0.15,
+      surface - 0.02,
+      z - side.z * radius * 0.35 - toCamera.z * radius * 0.15,
+    );
     world.add(landmark);
   });
 
