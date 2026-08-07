@@ -950,10 +950,17 @@ export function WorldScene() {
     const positionCurve = new THREE.CatmullRomCurve3(FLIGHT.map(({ p }) => new THREE.Vector3(...p)), false, "centripetal", 0.6);
     const targetCurve = new THREE.CatmullRomCurve3(FLIGHT.map(({ t }) => new THREE.Vector3(...t)), false, "centripetal", 0.6);
     const stopU = FLIGHT.map((point, index) => (point.stop ? index / (FLIGHT.length - 1) : null)).filter((u): u is number => u !== null);
+    /* Each section holds the camera at its stop for DWELL of the scroll on
+       both sides, and the transit in between is smoothstepped — so shots
+       linger while cards are read, then glide. */
+    const DWELL = 0.22;
     const progressToU = (progress: number) => {
       const scaled = Math.min(0.9999, Math.max(0, progress)) * (stopU.length - 1);
       const section = Math.floor(scaled);
-      return stopU[section] + (stopU[section + 1] - stopU[section]) * (scaled - section);
+      let f = (scaled - section - DWELL) / (1 - 2 * DWELL);
+      f = Math.min(1, Math.max(0, f));
+      f = f * f * (3 - 2 * f);
+      return stopU[section] + (stopU[section + 1] - stopU[section]) * f;
     };
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");

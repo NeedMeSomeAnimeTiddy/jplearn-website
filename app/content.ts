@@ -16,8 +16,8 @@ export const tracks: Track[] = [
   { glyph: "カ", name: "Katakana", jp: "カタカナ", detail: "Every katakana, mirroring the hiragana structure." },
   { glyph: "漢", name: "Kanji", jp: "漢字", detail: "JLPT N5 through N1, grouped by theme and built from components." },
   { glyph: "語", name: "Vocabulary", jp: "語彙", detail: "N5–N1 vocabulary in thematic groups — food, travel, school, work." },
-  { glyph: "文", name: "Grammar", jp: "文法", detail: "64+ patterns from the copula to conditionals, drilled in context." },
-  { glyph: "読", name: "Sentences", jp: "例文", detail: "A 200,000+ sentence bank for reading and cloze practice." },
+  { glyph: "文", name: "Grammar", jp: "文法", detail: "88 patterns from the copula to conditionals, drilled in context." },
+  { glyph: "読", name: "Sentences", jp: "例文", detail: "A 60,000-sentence bank, searchable offline, for reading and cloze practice." },
 ];
 
 export type Mode = {

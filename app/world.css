@@ -103,7 +103,7 @@
 
 /* ---------- sections ---------- */
 .w-sec {
-  min-height: 96vh; display: flex; align-items: center;
+  min-height: 118vh; display: flex; align-items: center;
   padding: 100px clamp(18px, 5vw, 72px);
 }
 .w-sec--right { justify-content: flex-end; }
@@ -221,6 +221,22 @@
 .w-final h2 { font-size: clamp(38px, 6vw, 64px); }
 .w-final > p { max-width: 52ch; font-size: 15.5px; line-height: 1.75; color: var(--muted); margin-bottom: 30px; }
 .w-final-note { margin-top: 20px; font-size: 12.5px; letter-spacing: 0.04em; color: var(--faint); }
+
+/* ---------- kickstarter story graphics ---------- */
+.w-ks {
+  width: min(1000px, calc(100vw - 36px)); margin-top: 74px;
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+}
+.w-ks h3 { font-size: clamp(22px, 3vw, 30px); font-weight: 700; letter-spacing: -0.01em; margin-top: -6px; }
+.w-ks > p { max-width: 56ch; font-size: 14.5px; line-height: 1.7; color: var(--muted); margin-bottom: 10px; }
+.w-ks-item {
+  width: 100%; margin: 0; border-radius: 18px; overflow: hidden;
+  border: 1px solid var(--glass-line);
+  box-shadow: 0 24px 60px rgba(4, 6, 24, 0.45);
+  background: var(--glass);
+}
+.w-ks-item img { width: 100%; height: auto; display: block; }
+.w-ks .w-note { margin-top: 6px; }
 
 .w-faq { width: 100%; margin-top: 54px; display: grid; gap: 10px; text-align: left; }
 .w-faq details {

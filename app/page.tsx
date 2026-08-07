@@ -232,6 +232,21 @@ export default function Home() {
               <button className="w-btn w-btn--wait" disabled>Download for Windows · coming soon</button>
             </div>
             <p className="w-final-note">No mailing list, no tracking — GitHub is the only bell we ring.</p>
+            <div className="w-ks">
+              <span className="w-eyebrow">The campaign · <b lang="ja">物語</b></span>
+              <h3>The Kickstarter, at a glance.</h3>
+              <p>Straight from the campaign story — real counts from the current build, the plan after funding, and what each tier gets.</p>
+              <figure className="w-ks-item w-reveal">
+                <Image src="/ks-whats-inside.webp" width={1400} height={700} unoptimized alt="What is already in the app, counted from the current build: 10,659 study cards ready on install; 2,218 kanji covering N5 through N1; 8,057 vocabulary words graded by JLPT level; 208 kana; £0 subscription cost as a one-off purchase; 88 grammar patterns with worked examples; 60,000 example sentences searchable offline; and JLPT coverage across all five levels." />
+              </figure>
+              <figure className="w-ks-item w-reveal">
+                <Image src="/ks-timeline.webp" width={1400} height={565} unoptimized alt="From funded to released, in four phases: October 2026 scope lock and review; November 2026 the backer beta opens; December 2026 to January 2027 corrections and release candidate; February 2027 JPLearn 1.0. Dates are targets, not guarantees." />
+              </figure>
+              <figure className="w-ks-item w-reveal">
+                <Image src="/ks-rewards.webp" width={1400} height={860} unoptimized alt="The six reward tiers: One Small Step at £1 gets backer updates; Supporter at £5 adds your name on the Supporter Wall; Early Bird at £15, limited to 150, adds the JPLearn 1.0 Windows licence and beta access; Full Access at £25 includes the same; Founder at £45 adds in-app credits and the Founder feedback channel; Project Sponsor at £100, limited to 30, adds the Sponsor Wall and a private development Q&A. All rewards are digital." />
+              </figure>
+              <p className="w-note">The full story goes live with the campaign — watchers hear first.</p>
+            </div>
             <div className="w-faq">
               {faq.map((item) => (
                 <details key={item.q}>
