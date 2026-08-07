@@ -23,7 +23,8 @@ const FLIGHT: FlightPoint[] = [
   { p: [-0.5, 5.6, 6.5], t: [-7, 2.5, -8] },                 //   arc back high across the island
   { p: [-8.8, 3.5, -8.2], t: [-15.5, 4.2, -14.5], stop: true }, // 3 lanterns — field left of frame
   { p: [-16, 7.2, -5], t: [-25, 11.2, 5], stop: true },         // 4 memory — orrery in open sky, upper right
-  { p: [-7.5, 4, 1.5], t: [-2.4, 1.4, -2.4] },               //   descend around the west islet
+  { p: [-13.5, 5.6, 2.5], t: [-7, 0.8, 9] },                 //   bank the gaze south so the turn is a pan, not a snap
+  { p: [-7.5, 4.6, 2.8], t: [-2.4, 1.4, -2.4] },             //   descend around the west islet, clearing the maple
   { p: [1.9, 1.8, 0.7], t: [-1.5, 1.3, -3.5], stop: true },  // 5 tutor — shrine and maple left
   { p: [3.5, 7.5, 4], t: [-4, 13, -25] },                    //   spiral ascent
   { p: [-1, 16, -16], t: [-13, 25, -53], stop: true },       // 6 stars — constellation upper right
@@ -526,7 +527,7 @@ function makeStarShell(count: number, radiusMin: number, radiusMax: number, colo
     points.userData.twinkle = {
       amp: twinkle,
       phases: Float32Array.from({ length: count }, () => twinkleRandom() * Math.PI * 2),
-      speeds: Float32Array.from({ length: count }, () => 1.2 + twinkleRandom() * 3.4),
+      speeds: Float32Array.from({ length: count }, () => 1.6 + twinkleRandom() * 4.6),
     };
   }
   return points;
@@ -893,9 +894,9 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   world.add(mistA, mistB);
 
   /* ambient particles — a three-layer star dome, fog-exempt like the moon */
-  const stars = makeStarShell(2600, 115, 165, 0xffffff, 1.3, soft, 1, 11, 0.75);
-  const starsFine = makeStarShell(2000, 130, 185, 0xcfd8ff, 0.8, soft, 0.6, 23);
-  const starsBright = makeStarShell(130, 110, 150, 0xfff2d8, 2.4, soft, 0.95, 37, 0.6);
+  const stars = makeStarShell(2600, 115, 165, 0xffffff, 1.3, soft, 1, 11, 0.92);
+  const starsFine = makeStarShell(2000, 130, 185, 0xcfd8ff, 0.8, soft, 0.65, 23, 0.85);
+  const starsBright = makeStarShell(130, 110, 150, 0xfff2d8, 2.4, soft, 0.95, 37, 0.78);
   const fireflies = makePoints(70, [26, 9, 24], [-4, 3.5, -4], 0xffd27e, 0.42, glow, 0.85, 51);
   const petals = makePoints(90, [26, 14, 22], [3, 5, -1], 0xf2a7c3, 0.3, soft, 0.65, 67);
   world.add(stars, starsFine, starsBright, fireflies, petals);
@@ -1042,7 +1043,7 @@ export function WorldScene() {
       });
     };
 
-    const twinkleLayers = [stars, starsBright];
+    const twinkleLayers = [stars, starsFine, starsBright];
     const updateTwinkle = (time: number) => {
       twinkleLayers.forEach((layer) => {
         const twinkle = layer.userData.twinkle as { amp: number; phases: Float32Array; speeds: Float32Array } | undefined;
@@ -1088,7 +1089,6 @@ export function WorldScene() {
         fireflies.rotation.y = time * 0.02;
         (fireflies.material as THREE.PointsMaterial).opacity = 0.62 + Math.sin(time * 1.3) * 0.22;
         updateTwinkle(time);
-        (starsFine.material as THREE.PointsMaterial).opacity = 0.45 + Math.sin(time * 0.7 + 2) * 0.22;
         (constellationStars.material as THREE.PointsMaterial).opacity = 0.72 + Math.sin(time * 1.4) * 0.26;
         pebbles.rotation.y = time * 0.012;
         moon.rotation.y = time * 0.018;
