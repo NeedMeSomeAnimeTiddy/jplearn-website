@@ -723,14 +723,14 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
 
   /* the route — six labeled curriculum islands, roped together */
   const routeSpecs: Array<{ pos: Vec3; radius: number }> = [
-    { pos: [10.5, -0.7, -3], radius: 1.7 },
+    { pos: [11.8, -0.7, -2], radius: 1.7 }, // offset from the stop-2 sightline so its bridge reads
+
     { pos: [15.5, 0.5, -9], radius: 2.1 }, // roomier — the pagoda needs clearance from its sign
     { pos: [19.5, -0.5, -16], radius: 1.8 },
     { pos: [22.5, 0.7, -24], radius: 1.4 },
     { pos: [24.5, -0.3, -33], radius: 1.6 },
     { pos: [25.5, 0.5, -43], radius: 2 },
   ];
-  const routeAnchors: THREE.Vector3[] = [];
   const stop2Camera = new THREE.Vector3(5.2, 4.4, 4.5);
   routeSpecs.forEach(({ pos, radius }, index) => {
     const [x, y, z] = pos;
@@ -739,7 +739,6 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     world.add(rock);
     // the grassy top sits at radius * 0.07 above the island origin
     const surface = y + radius * 0.07;
-    routeAnchors.push(new THREE.Vector3(x, surface + 0.3, z));
 
     /* the sign goes to the camera's left, the landmark to its right —
        perpendicular to the stop-2 view axis, so they never stack up */
@@ -767,31 +766,61 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     world.add(landmark);
   });
 
-  /* rope bridges between route islands */
-  const plankCount = (routeAnchors.length - 1) * 9;
+  /* rope bridges between route islands — anchored at the facing edges of
+     each pair, so both ends land on turf with posts marking the crossing */
+  const plankCount = (routeSpecs.length - 1) * 13;
   const planks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.05, 0.16), M.wood(), plankCount);
+  const bridgePostMaterial = M.wood();
   const ropePositions: number[] = [];
   let plankIndex = 0;
   const plankDummy = new THREE.Object3D();
-  for (let span = 0; span < routeAnchors.length - 1; span += 1) {
-    const from = routeAnchors[span];
-    const to = routeAnchors[span + 1];
-    const direction = to.clone().sub(from);
-    const yaw = Math.atan2(direction.x, direction.z);
-    const walkway = catenary(from, to, 0.9, 9);
-    walkway.slice(1, -1).forEach((point) => {
+  const plankAim = new THREE.Vector3();
+  for (let span = 0; span < routeSpecs.length - 1; span += 1) {
+    const near = routeSpecs[span];
+    const farSide = routeSpecs[span + 1];
+    const nearCenter = new THREE.Vector3(near.pos[0], near.pos[1] + near.radius * 0.07, near.pos[2]);
+    const farCenter = new THREE.Vector3(farSide.pos[0], farSide.pos[1] + farSide.radius * 0.07, farSide.pos[2]);
+    const direction = farCenter.clone().sub(nearCenter);
+    direction.y = 0;
+    direction.normalize();
+    // one skewed direction, added at the near end and subtracted at the far
+    // end — the endpoints land on opposite sides of the chain axis, so every
+    // span crosses it diagonally instead of foreshortening into a ladder
+    const skew = 0.55;
+    const skewDir = new THREE.Vector3(
+      direction.x * Math.cos(skew) - direction.z * Math.sin(skew), 0,
+      direction.x * Math.sin(skew) + direction.z * Math.cos(skew),
+    );
+    const from = nearCenter.clone().addScaledVector(skewDir, near.radius * 0.78).add(new THREE.Vector3(0, 0.04, 0));
+    const to = farCenter.clone().addScaledVector(skewDir, -farSide.radius * 0.78).add(new THREE.Vector3(0, 0.04, 0));
+    const sag = Math.min(1.1, Math.max(0.45, from.distanceTo(to) * 0.13));
+    const walkway = catenary(from, to, sag, 12);
+    walkway.forEach((point, index) => {
       plankDummy.position.copy(point);
-      plankDummy.rotation.set(0, yaw + Math.PI / 2, 0);
+      const behind = walkway[Math.max(0, index - 1)];
+      const ahead = walkway[Math.min(walkway.length - 1, index + 1)];
+      plankAim.copy(plankDummy.position).add(ahead.clone().sub(behind));
+      plankDummy.lookAt(plankAim);
       plankDummy.updateMatrix();
       planks.setMatrixAt(plankIndex, plankDummy.matrix);
       plankIndex += 1;
     });
-    [-0.22, 0.22].forEach((side) => {
-      const offset = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)).multiplyScalar(side);
-      const rope = catenary(from.clone().add(offset).add(new THREE.Vector3(0, 0.35, 0)), to.clone().add(offset).add(new THREE.Vector3(0, 0.35, 0)), 0.7, 10);
+    const across = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(0.2);
+    [1, -1].forEach((side) => {
+      const rope = catenary(
+        from.clone().addScaledVector(across, side).add(new THREE.Vector3(0, 0.34, 0)),
+        to.clone().addScaledVector(across, side).add(new THREE.Vector3(0, 0.34, 0)),
+        sag * 0.85,
+        12,
+      );
       for (let index = 0; index < rope.length - 1; index += 1) {
         ropePositions.push(rope[index].x, rope[index].y, rope[index].z, rope[index + 1].x, rope[index + 1].y, rope[index + 1].z);
       }
+      [from, to].forEach((endPoint) => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.038, 0.42, 5), bridgePostMaterial);
+        post.position.copy(endPoint).addScaledVector(across, side).add(new THREE.Vector3(0, 0.17, 0));
+        world.add(post);
+      });
     });
   }
   planks.count = plankIndex;
