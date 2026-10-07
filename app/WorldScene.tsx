@@ -1001,7 +1001,8 @@ export function WorldScene() {
     try {
       renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
     } catch {
-      canvas.hidden = true;
+      // No usable WebGL (missing or crashed graphics driver): show a still of the world instead.
+      canvas.classList.add("is-fallback");
       return;
     }
 

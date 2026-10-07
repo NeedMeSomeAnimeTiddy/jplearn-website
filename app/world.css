@@ -33,6 +33,7 @@
   opacity: 0; transition: opacity 1.4s ease;
 }
 .w-canvas.is-on { opacity: 1; }
+.w-canvas.is-fallback { opacity: 1; background: url("/world-fallback.jpg") 60% center / cover no-repeat; }
 
 .w main, .w-nav, .w-rail { position: relative; z-index: 2; }
 
