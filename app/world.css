@@ -5,7 +5,7 @@
 .w {
   --text: #f2eeff;
   --muted: rgba(242, 238, 255, 0.72);
-  --faint: rgba(242, 238, 255, 0.5);
+  --faint: rgba(242, 238, 255, 0.65);
   --glass: rgba(13, 12, 36, 0.55);
   --glass-line: rgba(255, 255, 255, 0.16);
   --gold: #ffb45e;
@@ -37,9 +37,12 @@
 .w main, .w-nav, .w-rail { position: relative; z-index: 2; }
 
 /* ---------- reveal ---------- */
-.w-reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
-.w-reveal.is-in { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) { .w-reveal { opacity: 1; transform: none; } }
+/* Content is only hidden once JS is running (the `js` class is set in the
+   layout), so it stays readable if scripts fail or are blocked. */
+.w-reveal { transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.js .w-reveal { opacity: 0; transform: translateY(30px); }
+.js .w-reveal.is-in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .js .w-reveal { opacity: 1; transform: none; } }
 
 /* ---------- nav ---------- */
 .w-nav {
@@ -53,6 +56,12 @@
 .w-nav-right { display: flex; align-items: center; gap: 18px; }
 .w-nav-link { font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; }
 .w-nav-link:hover { color: var(--text); }
+.w-nav .w-btn { white-space: nowrap; }
+@media (max-width: 480px) {
+  .w-brand img { height: 28px; }
+  .w-nav-link { display: none; }
+  .w-kicker i { display: none; }
+}
 
 /* ---------- flight rail ---------- */
 .w-rail {
@@ -124,7 +133,12 @@
   display: inline-flex; align-items: center; gap: 10px;
   font-size: 12px; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase;
   color: var(--gold); margin-bottom: 24px;
+  flex-wrap: wrap; row-gap: 6px;
+  /* dark backing keeps the gold legible where it crosses the moon */
+  padding: 7px 14px; border-radius: 14px;
+  background: rgba(7, 11, 36, 0.55); backdrop-filter: blur(8px);
 }
+.w-kicker span { white-space: nowrap; }
 .w-kicker i { width: 30px; height: 1px; background: var(--gold); }
 .w-hero h1 {
   font-size: clamp(52px, 9vw, 104px); font-weight: 700; line-height: 1.02;

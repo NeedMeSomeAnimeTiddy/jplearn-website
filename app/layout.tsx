@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { getBaseUrl } from "./site-url";
+import { SITE_URL } from "./site-url";
 import { GITHUB_URL } from "./content";
 import "./globals.css";
 
@@ -13,40 +13,36 @@ export const viewport: Viewport = {
   themeColor: "#070b24",
 };
 
-export async function generateMetadata(): Promise<Metadata> {
-  const baseUrl = await getBaseUrl();
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
+  title,
+  description,
+  applicationName: "JPLearn",
+  keywords: ["learn Japanese", "Japanese desktop app", "spaced repetition", "kanji", "hiragana", "handwriting practice", "JLPT"],
+  icons: { icon: "/jplearn-icon.png", shortcut: "/jplearn-icon.png" },
+  alternates: { canonical: "/" },
+  openGraph: { title, description, type: "website", url: "/", siteName: "JPLearn", locale: "en_GB", images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "A twilight floating island with a torii gate — JPLearn, step into Japanese" }] },
+  twitter: { card: "summary_large_image", title, description, images: ["/og.jpg"] },
+  robots: { index: true, follow: true },
+};
 
-  return {
-    metadataBase: new URL(baseUrl),
-    title,
-    description,
-    applicationName: "JPLearn",
-    keywords: ["learn Japanese", "Japanese desktop app", "spaced repetition", "kanji", "hiragana", "handwriting practice", "JLPT"],
-    icons: { icon: "/jplearn-icon.png", shortcut: "/jplearn-icon.png" },
-    alternates: { canonical: "/" },
-    openGraph: { title, description, type: "website", siteName: "JPLearn", locale: "en_GB", images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "A twilight floating island with a torii gate — JPLearn, step into Japanese" }] },
-    twitter: { card: "summary_large_image", title, description, images: ["/og.jpg"] },
-    robots: { index: true, follow: true },
-  };
-}
-
-export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const baseUrl = await getBaseUrl();
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "JPLearn",
     description,
-    url: baseUrl,
-    image: `${baseUrl}/og.jpg`,
+    url: `${SITE_URL}/`,
+    image: `${SITE_URL}/og.jpg`,
     applicationCategory: "EducationalApplication",
     operatingSystem: "Windows",
     publisher: { "@type": "Organization", name: "JPLearn", url: GITHUB_URL },
   };
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
+        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={FONTS_HREF} precedence="default" />

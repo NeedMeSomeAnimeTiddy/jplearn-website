@@ -1,8 +1,3 @@
-import { headers } from "next/headers";
-
-export async function getBaseUrl(): Promise<string> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
-}
+// Fixed rather than read from request headers, which a client can spoof
+// (X-Forwarded-Host) and which differ on preview hostnames.
+export const SITE_URL = "https://jplearn.app";

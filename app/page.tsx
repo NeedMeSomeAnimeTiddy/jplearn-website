@@ -31,7 +31,8 @@ export default function Home() {
     const reveals = Array.from(page.querySelectorAll<HTMLElement>(".w-reveal"));
     const revealObserver = new IntersectionObserver(
       (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add("is-in")),
-      { threshold: 0.2 },
+      // threshold 0 so blocks taller than the viewport (the final section) still reveal
+      { threshold: 0, rootMargin: "0px 0px -10% 0px" },
     );
     reveals.forEach((element) => revealObserver.observe(element));
 
@@ -42,10 +43,15 @@ export default function Home() {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
           const index = Number(entry.target.getAttribute("data-stop"));
-          dots.forEach((dot, dotIndex) => dot.classList.toggle("is-here", dotIndex === index));
+          dots.forEach((dot, dotIndex) => {
+            dot.classList.toggle("is-here", dotIndex === index);
+            if (dotIndex === index) dot.setAttribute("aria-current", "step");
+            else dot.removeAttribute("aria-current");
+          });
         });
       },
-      { threshold: 0.5 },
+      // a section is "current" while it crosses the viewport's centre line, however tall it is
+      { rootMargin: "-50% 0px -50% 0px", threshold: 0 },
     );
     sections.forEach((section) => stopObserver.observe(section));
 
@@ -82,6 +88,7 @@ export default function Home() {
             key={stop}
             type="button"
             className={index === 0 ? "is-here" : undefined}
+            aria-current={index === 0 ? "step" : undefined}
             data-label={stop}
             aria-label={`Fly to ${stop}`}
             onClick={() => flyTo(index)}
@@ -130,16 +137,16 @@ export default function Home() {
         <section className="w-sec" data-stop="2">
           <div className="w-card w-reveal">
             <span className="w-eyebrow">The route · <b lang="ja">道</b></span>
-            <h2>Six islands, crossed in order.</h2>
+            <h2>Six islands, one route.</h2>
             <p>
               A 16-node curriculum graph runs from your first hiragana to N1. Blocks unlock at 80% mastery
-              of the one before — and every gate is soft: the app warns, you decide.
+              of the one before, and on the curriculum map every gate is soft: the app warns, you decide.
             </p>
             <div className="w-tracks">
-              {tracks.map((track, index) => (
+              {tracks.map((track) => (
                 <div className="w-track" key={track.name}>
                   <b lang="ja">{track.glyph}</b>
-                  <span><strong>{track.name}</strong><small>{index + 1} / 6 · {track.jp}</small></span>
+                  <span><strong>{track.name}</strong><small lang="ja">{track.jp}</small></span>
                 </div>
               ))}
             </div>
