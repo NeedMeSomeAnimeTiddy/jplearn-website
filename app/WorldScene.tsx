@@ -2,12 +2,13 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 /* A twilight floating-shrine world. Each scroll stop frames a purpose-built
    diorama: the grand gate, the shrine courtyard, six labeled curriculum
    islands, a lantern festival, a memory orrery, and a torii constellation.
    The camera flies a shaped spline (stops + shaping mids) with gentle
-   banking; the fixed CSS sky shifts with camera altitude. */
+   easing and a level horizon; the fixed CSS sky shifts with camera altitude. */
 
 type Vec3 = [number, number, number];
 type FlightPoint = { p: Vec3; t: Vec3; stop?: boolean };
@@ -15,11 +16,11 @@ type FlightPoint = { p: Vec3; t: Vec3; stop?: boolean };
 /* Cards alternate sides per section, so each subject is framed on the
    opposite side: stops 1/3/5 push subjects left, 0/2/4/6 push them right. */
 const FLIGHT: FlightPoint[] = [
-  { p: [-2, 2.6, 19.5], t: [-3.2, 1.7, 0], stop: true },     // 0 the gate — island right of frame
+  { p: [-2, 6.8, 24], t: [-5.4, 0.5, 0], stop: true },     // 0 the gate — island right of frame
   { p: [0, 2.15, 10], t: [0, 1.9, 4.4] },                    //   locked approach to the torii
   { p: [0.2, 1.9, 3.1], t: [-0.4, 1.15, -3.1], stop: true }, // 1 threshold — shrine left of frame
   { p: [4.8, 3.6, 5.5], t: [7, 1, -8] },                     //   swing right over the garden
-  { p: [5.2, 4.4, 4.5], t: [11.5, -0.5, -22], stop: true },  // 2 the route — chain recedes right
+  { p: [5.2, 7.8, 10], t: [11.5, -0.5, -22], stop: true },  // 2 the route — chain recedes right
   { p: [-0.5, 5.6, 6.5], t: [-7, 2.5, -8] },                 //   arc back high across the island
   { p: [-8.8, 3.5, -8.2], t: [-15.5, 4.2, -14.5], stop: true }, // 3 lanterns — field left of frame
   { p: [-16, 7.2, -5], t: [-25, 11.2, 5], stop: true },         // 4 memory — orrery in open sky, upper right
@@ -29,7 +30,7 @@ const FLIGHT: FlightPoint[] = [
   { p: [3.5, 7.5, 4], t: [-4, 13, -25] },                    //   spiral ascent
   { p: [-1, 16, -16], t: [-13, 25, -53], stop: true },       // 6 stars — constellation upper right
   { p: [8, 8.5, 17], t: [0, 2.6, 0] },                       //   swooping dive home
-  { p: [0, 3.3, 24], t: [0, 1.7, 0], stop: true },           // 7 landing — centered, mirroring the gate
+  { p: [0, 7, 30], t: [0, 3.4, 0], stop: true },           // 7 landing — centered, mirroring the gate
 ];
 
 const TRACK_GLYPHS = ["あ", "カ", "漢", "語", "文", "読"];
@@ -91,10 +92,10 @@ const M = {
   wood: () => new THREE.MeshLambertMaterial({ color: 0x5a4670, flatShading: true }),
   stone: () => new THREE.MeshLambertMaterial({ color: 0x6e6194, flatShading: true }),
   stoneDark: () => new THREE.MeshLambertMaterial({ color: 0x54487a, flatShading: true }),
-  wall: () => new THREE.MeshLambertMaterial({ color: 0x4a3866, flatShading: true }),
-  roof: () => new THREE.MeshLambertMaterial({ color: 0x2b2150, flatShading: true }),
+  wall: () => new THREE.MeshLambertMaterial({ color: 0x9b7783, flatShading: true }),
+  roof: () => new THREE.MeshLambertMaterial({ color: 0x38465e, flatShading: true }),
   dark: () => new THREE.MeshLambertMaterial({ color: 0x30224a }),
-  pine: () => new THREE.MeshLambertMaterial({ color: 0x265752, flatShading: true }),
+  pine: () => new THREE.MeshLambertMaterial({ color: 0x427a71, flatShading: true }),
   trunk: () => new THREE.MeshLambertMaterial({ color: 0x3d2f4a }),
   maple: () => new THREE.MeshLambertMaterial({ color: 0xc25668, flatShading: true }),
   sakura: () => new THREE.MeshLambertMaterial({ color: 0xe58fae, flatShading: true }),
@@ -106,51 +107,72 @@ const M = {
 
 /* ---------- builders ---------- */
 
-/* One continuous mesh per island: the icosahedron's top is flattened into a
-   walkable plateau at exactly +0.07r (prop placement depends on it), the
-   keel stretches downward, and faces are vertex-colored — grass on top,
-   rock below — so turf and stone can never separate. */
+/* Radial strata share their vertices at each seam. The plateau remains at
+   +0.07r so every existing landmark and bridge keeps its ground contact. */
 function makeRockIsland(radius: number, far = false) {
   const island = new THREE.Group();
-  const geometry = new THREE.IcosahedronGeometry(radius, 2);
-  geometry.scale(1, 1.15, 1);
-  const positions = geometry.getAttribute("position") as THREE.BufferAttribute;
-  const vertex = new THREE.Vector3();
-  const plateau = radius * 0.07;
-  for (let index = 0; index < positions.count; index += 1) {
-    vertex.fromBufferAttribute(positions, index);
-    const height = vertex.y;
-    if (height > 0) vertex.y = Math.min(plateau, height * 0.25);
-    else vertex.y = height * 1.22; // deeper keel
-    // deterministic crags — a function of the original position, so the
-    // coincident copies in this non-indexed geometry always move together
-    const jitter = 1 + (Math.sin(vertex.x * 7.3 + vertex.z * 5.1) * 0.5 + Math.sin(height * 9.7) * 0.5) * 0.07;
-    if (vertex.y < plateau * 0.9) {
-      vertex.x *= jitter;
-      vertex.z *= jitter;
-      if (vertex.y < 0) vertex.y *= jitter;
+  const sides = 36;
+  const levels = [[0.07, 1], [-0.06, 1.02], [-0.2, 0.91], [-0.27, 0.94], [-0.49, 0.76], [-0.55, 0.8], [-0.81, 0.51], [-1.08, 0.24], [-1.22, 0.02]];
+  const palette = [0x568d78, 0x446b66, 0x71818c, 0x9b8593, 0x526779, 0x7b758b, 0x45566c, 0x39485f];
+  const vertices: number[] = [];
+  const colors: number[] = [];
+  const point = (level: number, i: number) => {
+    const a = (i % sides) / sides * Math.PI * 2;
+    const crag = 1 + Math.sin(a * 7 + 0.4) * 0.035 + Math.cos(a * 11) * 0.022;
+    const [y, r] = levels[level];
+    return new THREE.Vector3(Math.cos(a) * r * radius * crag, y * radius + (level === 0 ? 0 : Math.sin(a * 9 + level) * radius * 0.035), Math.sin(a) * r * radius * crag);
+  };
+  const face = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, color: number, shade: number) => {
+    const tint = new THREE.Color(color).multiplyScalar(shade * (far ? 0.9 : 1));
+    vertices.push(...a.toArray(), ...b.toArray(), ...c.toArray());
+    for (let i = 0; i < 3; i++) colors.push(tint.r, tint.g, tint.b);
+  };
+  for (let i = 0; i < sides; i++) {
+    face(new THREE.Vector3(0, radius * 0.07, 0), point(0, i + 1), point(0, i), 0x568d78, 0.94 + (i % 5) * 0.025);
+    for (let level = 0; level < levels.length - 1; level++) {
+      const a = point(level, i), b = point(level, i + 1), c = point(level + 1, i), d = point(level + 1, i + 1);
+      face(a, b, c, palette[level], 0.86 + (i % 4) * 0.055);
+      face(b, d, c, palette[level], 0.9 + (i % 3) * 0.05);
     }
-    positions.setXYZ(index, vertex.x, vertex.y, vertex.z);
   }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
+  island.add(new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
 
-  const grassA = new THREE.Color(0x35635c);
-  const grassB = new THREE.Color(0x3b6b60);
-  const rockA = new THREE.Color(far ? 0x362b5c : 0x3c3163);
-  const rockB = new THREE.Color(far ? 0x2e2450 : 0x342a57);
-  const colors = new Float32Array(positions.count * 3);
-  for (let face = 0; face < positions.count; face += 3) {
-    const centroidY = (positions.getY(face) + positions.getY(face + 1) + positions.getY(face + 2)) / 3;
-    const color = centroidY > plateau * 0.6 ? (face % 2 ? grassA : grassB) : (face % 3 ? rockA : rockB);
-    for (let corner = 0; corner < 3; corner += 1) {
-      colors[(face + corner) * 3] = color.r;
-      colors[(face + corner) * 3 + 1] = color.g;
-      colors[(face + corner) * 3 + 2] = color.b;
+  // Hanging moss follows the cliff, leaving the walkable plateau unobstructed.
+  const moss = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), M.pine(), sides);
+  scatterInstances(moss, sides, (i, dummy) => {
+    const a = i / sides * Math.PI * 2;
+    const length = radius * (0.06 + (i % 5) * 0.018);
+    dummy.position.set(Math.cos(a) * radius * 0.97, -length * 0.4, Math.sin(a) * radius * 0.97);
+    dummy.scale.set(radius * 0.045, length, radius * 0.045);
+    dummy.rotation.set(0, -a, 0.12);
+  });
+  island.add(moss);
+  return island;
+}
+
+/* A shallow curved hip roof, with lifted eaves instead of a solid pyramid. */
+function makeRoof(width: number, height: number) {
+  const vertices: number[] = [];
+  const levels = [[1, 0.12], [0.74, 0.2], [0.36, 0.72], [0.035, 1]];
+  const corners = (r: number, y: number) => [[-r, y, -r], [-r, y, r], [r, y, r], [r, y, -r]];
+  for (let tier = 0; tier < levels.length - 1; tier++) {
+    const lower = corners(levels[tier][0] * width, levels[tier][1] * height);
+    const upper = corners(levels[tier + 1][0] * width, levels[tier + 1][1] * height);
+    for (let i = 0; i < 4; i++) {
+      const n = (i + 1) % 4;
+      vertices.push(...lower[i], ...lower[n], ...upper[i], ...lower[n], ...upper[n], ...upper[i]);
     }
   }
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  island.add(new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
-  return island;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.computeVertexNormals();
+  const material = M.roof();
+  material.side = THREE.DoubleSide;
+  return new THREE.Mesh(geometry, material);
 }
 
 function makeTorii(scale = 1, withShimenawa = false) {
@@ -195,12 +217,11 @@ function makeShrine(scale = 1) {
   base.position.y = 0.15;
   const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.1, 1.5), M.wall());
   body.position.y = 0.95;
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.85, 0.9, 4), M.roof());
-  roof.position.y = 1.98;
-  roof.rotation.y = Math.PI / 4;
-  const roofTop = new THREE.Mesh(new THREE.ConeGeometry(1.1, 0.55, 4), M.roof());
-  roofTop.position.y = 2.62;
-  roofTop.rotation.y = Math.PI / 4;
+  const roof = makeRoof(1.42, 0.85);
+  roof.position.y = 1.48;
+  const roofTop = makeRoof(0.82, 0.55);
+  roofTop.position.y = 2.16;
+
   const door = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.7), M.warm());
   door.position.set(0, 0.85, 0.755);
   const lampA = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), M.paper());
@@ -208,6 +229,22 @@ function makeShrine(scale = 1) {
   const lampB = lampA.clone();
   lampB.position.x = 0.75;
   shrine.add(base, body, roof, roofTop, door, lampA, lampB);
+  const timber = M.redDark();
+  [-0.84, -0.38, 0.38, 0.84].forEach((x) => {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.12, 0.08), timber);
+    post.position.set(x, 0.94, 0.8);
+    shrine.add(post);
+  });
+  [0.48, 0.65, 0.82, 0.99, 1.16, 1.33].forEach((y) => {
+    [-0.64, 0.64].forEach((x) => {
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.025, 0.07), M.gold());
+      slat.position.set(x, y, 0.79);
+      shrine.add(slat);
+    });
+  });
+  const porch = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.12, 0.65), M.wood());
+  porch.position.set(0, 0.3, 1.0);
+  shrine.add(porch);
   shrine.scale.setScalar(scale);
   return shrine;
 }
@@ -233,13 +270,19 @@ function makeBlossomTree(material: THREE.Material, scale = 1) {
   const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.5, 5), M.trunk());
   branch.position.set(0.25, 0.95, 0);
   branch.rotation.z = -0.7;
-  const blobA = new THREE.Mesh(new THREE.IcosahedronGeometry(0.52, 0), material);
-  blobA.position.set(0, 1.35, 0);
-  const blobB = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 0), material);
-  blobB.position.set(0.5, 1.18, 0.12);
-  const blobC = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 0), material);
-  blobC.position.set(-0.42, 1.12, -0.14);
-  tree.add(trunk, branch, blobA, blobB, blobC);
+  tree.add(trunk, branch);
+  // Shared faceted clusters produce a broad, layered blossom canopy.
+  const canopy = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), material, 24);
+  const random = mulberry32(35);
+  scatterInstances(canopy, 24, (i, dummy) => {
+    const a = i * 2.39996;
+    const r = Math.sqrt(random()) * 0.66;
+    dummy.position.set(Math.cos(a) * r, 1.22 + random() * 0.4 - r * 0.16, Math.sin(a) * r * 0.75);
+    dummy.scale.set(0.25 + random() * 0.18, 0.16 + random() * 0.1, 0.25 + random() * 0.15);
+    dummy.rotation.set(random(), random(), random());
+    canopy.setColorAt(i, new THREE.Color().setRGB(1, 0.8 + random() * 0.2, 0.85 + random() * 0.15));
+  });
+  tree.add(canopy);
   tree.scale.setScalar(scale);
   return tree;
 }
@@ -308,9 +351,8 @@ function makePagoda() {
     const y = tier * 0.85;
     const body = new THREE.Mesh(new THREE.BoxGeometry(width * 0.72, 0.6, width * 0.72), M.wall());
     body.position.y = y + 0.3;
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(width, 0.45, 4), M.roof());
-    roof.position.y = y + 0.82;
-    roof.rotation.y = Math.PI / 4;
+    const roof = makeRoof(width * 0.8, 0.45);
+    roof.position.y = y + 0.56;
     pagoda.add(body, roof);
   });
   const finial = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.55, 5), M.gold());
@@ -505,13 +547,25 @@ function makeMoon(radius: number) {
 
 function makeCloud(scale: number, flat = false) {
   const cloud = new THREE.Group();
-  const material = new THREE.MeshLambertMaterial({ color: 0x6a5a9e, transparent: true, opacity: flat ? 0.38 : 0.5, flatShading: true });
+  const material = new THREE.MeshBasicMaterial({ color: 0xb3a4c8, transparent: true, opacity: flat ? 0.065 : 0.08, depthWrite: false });
   const blobs = 4 + Math.floor(scale);
   for (let index = 0; index < blobs; index += 1) {
-    const blob = new THREE.Mesh(new THREE.SphereGeometry(0.8 + (index % 3) * 0.4, 7, 6), material);
+    const blob = new THREE.Mesh(new THREE.SphereGeometry(0.8 + (index % 3) * 0.4, 12, 8), material);
     blob.position.set(index * 1.1 - blobs * 0.5, (index % 2) * 0.3, (index % 3) * 0.6 - 0.6);
     blob.scale.y = flat ? 0.26 : 0.42;
     cloud.add(blob);
+  }
+  const parts = cloud.children.map((object) => {
+    const mesh = object as THREE.Mesh;
+    mesh.updateMatrix();
+    mesh.geometry.applyMatrix4(mesh.matrix);
+    return mesh.geometry;
+  });
+  const merged = mergeGeometries(parts);
+  if (merged) {
+    cloud.clear();
+    cloud.add(new THREE.Mesh(merged, material));
+    parts.forEach((part) => part.dispose());
   }
   cloud.scale.setScalar(scale);
   return cloud;
@@ -591,6 +645,52 @@ function catenary(from: THREE.Vector3, to: THREE.Vector3, sag: number, samples: 
   return points;
 }
 
+/* Bake opaque stationary props by material. Animated groups and textured signs
+   keep their own transforms; repeated foliage already uses instancing. */
+function batchStaticGeometry(world: THREE.Group, animated: THREE.Object3D[]) {
+  world.updateMatrixWorld(true);
+  const excluded = new Set<THREE.Object3D>();
+  animated.forEach((root) => root.traverse((object) => excluded.add(object)));
+  const buckets = new Map<string, THREE.Mesh[]>();
+  world.traverse((object) => {
+    if (!(object instanceof THREE.Mesh) || object instanceof THREE.InstancedMesh || excluded.has(object)) return;
+    const material = object.material as THREE.MeshLambertMaterial;
+    if (Array.isArray(material) || material.transparent || material.map) return;
+    const key = JSON.stringify([material.type, material.color?.getHex(), material.emissive?.getHex(), material.flatShading, material.vertexColors, material.side, material.fog]);
+    const bucket = buckets.get(key) ?? [];
+    bucket.push(object);
+    buckets.set(key, bucket);
+  });
+  const retiredGeometry = new Set<THREE.BufferGeometry>();
+  const retiredMaterials = new Set<THREE.Material>();
+  buckets.forEach((meshes) => {
+    if (meshes.length < 2) return;
+    const parts = meshes.map((mesh) => {
+      const geometry = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
+      geometry.deleteAttribute("uv");
+      geometry.applyMatrix4(mesh.matrixWorld);
+      return geometry;
+    });
+    const merged = mergeGeometries(parts);
+    parts.forEach((part) => part.dispose());
+    if (!merged) return;
+    world.add(new THREE.Mesh(merged, meshes[0].material));
+    meshes.forEach((mesh) => {
+      retiredGeometry.add(mesh.geometry);
+      retiredMaterials.add(mesh.material as THREE.Material);
+      mesh.removeFromParent();
+    });
+  });
+  world.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    retiredGeometry.delete(mesh.geometry);
+    if (Array.isArray(mesh.material)) mesh.material.forEach((material) => retiredMaterials.delete(material));
+    else retiredMaterials.delete(mesh.material);
+  });
+  retiredGeometry.forEach((geometry) => geometry.dispose());
+  retiredMaterials.forEach((material) => material.dispose());
+}
+
 /* ---------- world assembly ---------- */
 
 function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
@@ -666,6 +766,22 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     world.add(lantern);
   });
 
+  /* A spring spills over the eastern rim into the cloud sea. */
+  const waterMaterial = new THREE.MeshBasicMaterial({ color: 0x9bdbdd, transparent: true, opacity: 0.48, side: THREE.DoubleSide, depthWrite: false });
+  for (let i = 0; i < 3; i++) {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(5.65, 0.48, 1.9 + i * 0.13),
+      new THREE.Vector3(6.38, 0.1, 1.9 + i * 0.13),
+      new THREE.Vector3(6.48, -2.8, 1.95 + i * 0.14),
+      new THREE.Vector3(6.25, -6.6, 2.1 + i * 0.17),
+    ]);
+    world.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 18, 0.055 + i * 0.012, 4, false), waterMaterial));
+  }
+  const spray = new THREE.Sprite(new THREE.SpriteMaterial({ map: soft, color: 0xc5e4e9, transparent: true, opacity: 0.2, depthWrite: false }));
+  spray.position.set(6.25, -6.5, 2.2);
+  spray.scale.set(2.5, 1.7, 1);
+  world.add(spray);
+
   /* west islet — moved clear of the main island so the crossing is real */
   const islet = makeRockIsland(2);
   islet.position.set(-9.2, -0.75, 3);
@@ -731,7 +847,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     { pos: [24.5, -0.3, -33], radius: 1.6 },
     { pos: [25.5, 0.5, -43], radius: 2 },
   ];
-  const stop2Camera = new THREE.Vector3(5.2, 4.4, 4.5);
+  const stop2Camera = new THREE.Vector3(5.2, 7.8, 10);
   routeSpecs.forEach(({ pos, radius }, index) => {
     const [x, y, z] = pos;
     const rock = makeRockIsland(radius, true);
@@ -872,7 +988,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   wireGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(wirePositions), 3));
   world.add(new THREE.LineSegments(wireGeometry, new THREE.LineBasicMaterial({ color: 0x8d7fb8, transparent: true, opacity: 0.5 })));
 
-  for (let index = 0; index < 40; index += 1) {
+  for (let index = 0; index < 17; index += 1) {
     const lantern = makePaperLantern(glow);
     lantern.position.set(
       -14 + (((index * 29) % 23) / 22 - 0.5) * 11,
@@ -881,6 +997,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     );
     lantern.scale.setScalar(0.5 + ((index * 7) % 10) / 20);
     world.add(lantern);
+    lantern.userData.baseY = lantern.position.y;
     lanterns.push(lantern);
   }
 
@@ -951,7 +1068,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
 
   /* a real moon — cratered, lit, slowly turning */
   const moon = makeMoon(7);
-  moon.position.set(-34, 30, -80);
+  moon.position.set(18, 16, -80);
   const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xf6e7c8, transparent: true, opacity: 0.4, depthWrite: false }));
   moonHalo.scale.setScalar(32);
   moonHalo.position.copy(moon.position);
@@ -967,9 +1084,9 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   world.add(mistA, mistB);
 
   /* ambient particles — a three-layer star dome, fog-exempt like the moon */
-  const stars = makeStarShell(2600, 115, 165, 0xffffff, 1.3, soft, 1, 11, 0.92);
-  const starsFine = makeStarShell(2000, 130, 185, 0xcfd8ff, 0.8, soft, 0.65, 23, 0.85);
-  const starsBright = makeStarShell(130, 110, 150, 0xfff2d8, 2.4, soft, 0.95, 37, 0.78);
+  const stars = makeStarShell(850, 115, 165, 0xffffff, 0.7, soft, 0.7, 11, 0.6);
+  const starsFine = makeStarShell(650, 130, 185, 0xcfd8ff, 0.4, soft, 0.45, 23, 0.5);
+  const starsBright = makeStarShell(70, 110, 150, 0xfff2d8, 1.3, soft, 0.8, 37, 0.5);
   const fireflies = makePoints(70, [26, 9, 24], [-4, 3.5, -4], 0xffd27e, 0.42, glow, 0.85, 51);
   const petals = makePoints(90, [26, 14, 22], [3, 5, -1], 0xf2a7c3, 0.3, soft, 0.65, 67);
   world.add(stars, starsFine, starsBright, fireflies, petals);
@@ -985,6 +1102,8 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     return streak;
   });
 
+  batchStaticGeometry(world, [...lanterns, ...orbitCards, moon]);
+
   return { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon };
 }
 
@@ -999,20 +1118,20 @@ export function WorldScene() {
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
+      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "default" });
     } catch {
-      canvas.hidden = true;
+      canvas.classList.add("is-fallback", "is-on");
       return;
     }
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x241d4e, 0.0095);
+    scene.fog = new THREE.FogExp2(0x555378, 0.007);
     const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 300);
 
-    const hemisphere = new THREE.HemisphereLight(0x8d7fd8, 0xd4694a, 1.0);
-    const warm = new THREE.DirectionalLight(0xffb45e, 1.1);
+    const hemisphere = new THREE.HemisphereLight(0xb9c8f5, 0x605977, 1.65);
+    const warm = new THREE.DirectionalLight(0xffd1a3, 2.0);
     warm.position.set(-14, 6, 10);
-    const cool = new THREE.DirectionalLight(0x7f9fe8, 0.4);
+    const cool = new THREE.DirectionalLight(0x9dbdff, 1.1);
     cool.position.set(10, 14, -8);
     scene.add(hemisphere, warm, cool);
 
@@ -1037,7 +1156,7 @@ export function WorldScene() {
       const section = Math.floor(scaled);
       let f = (scaled - section - DWELL) / (1 - 2 * DWELL);
       f = Math.min(1, Math.max(0, f));
-      f = f * f * (3 - 2 * f);
+      f = f * f * f * (f * (f * 6 - 15) + 10);
       return stopU[section] + (stopU[section + 1] - stopU[section]) * f;
     };
 
@@ -1055,21 +1174,21 @@ export function WorldScene() {
       active: false, life: 0, nextAt: 3 + index * 5, velocity: new THREE.Vector3(),
     }));
 
-    let pointerX = 0;
-    let pointerY = 0;
     let frame = 0;
     let lastTime = 0;
-    let bank = 0;
-    let previousCameraX = camera.position.x;
+    let devProgress: number | null = null;
+    let frozenTime: number | null = null;
+    let elapsed = 0;
 
-    /* The camera anchors to real section centres, so it rests exactly while
-       each section's pinned card is on screen, whatever the section heights. */
+    /* Anchor each shot while its card is visible. The long finale anchors near
+       its heading, not halfway down the campaign graphics and FAQ. */
     let sectionCenters: number[] = [];
     const measureSections = () => {
       const sections = Array.from(document.querySelectorAll<HTMLElement>("[data-stop]"));
       if (sections.length < 2) return;
       const viewport = window.innerHeight;
-      sectionCenters = sections.map((section) => section.offsetTop + section.offsetHeight / 2 - viewport / 2);
+      sectionCenters = sections.map((section, index) => index === 0 ? 0 :
+        section.offsetTop + (index === sections.length - 1 ? -viewport * 0.12 : Math.min(viewport * 0.25, (section.offsetHeight - viewport) / 2)));
     };
     const scrollToU = () => {
       if (sectionCenters.length < 2) return 0;
@@ -1079,17 +1198,42 @@ export function WorldScene() {
       let f = (y - sectionCenters[segment]) / Math.max(1, sectionCenters[segment + 1] - sectionCenters[segment]);
       f = (Math.min(1, Math.max(0, f)) - DWELL) / (1 - 2 * DWELL);
       f = Math.min(1, Math.max(0, f));
-      f = f * f * (3 - 2 * f);
+      f = f * f * f * (f * (f * 6 - 15) + 10);
       return stopU[segment] + (stopU[segment + 1] - stopU[segment]) * f;
     };
 
+    const mobileTargets: Vec3[] = [[0, 0.5, 0], [-1.5, 1.5, -2.9], [17, 0, -17], [-14, 4.5, -14], [-25, 11, 1], [-1.8, 1.5, -2.9], [-9, 26, -54], [0, 0.5, 0]];
+    const mobileTargetCurve = new THREE.CatmullRomCurve3(FLIGHT.map((point, index) => {
+      const stopIndex = stopU.indexOf(index / (FLIGHT.length - 1));
+      return new THREE.Vector3(...(stopIndex >= 0 ? mobileTargets[stopIndex] : point.t));
+    }), false, "centripetal");
+    const mobilePositionCurve = new THREE.CatmullRomCurve3(FLIGHT.map((point, index) => {
+      const stopIndex = stopU.indexOf(index / (FLIGHT.length - 1));
+      if (stopIndex === 1) return new THREE.Vector3(-5, 6, 8);
+      if (stopIndex === 5) return new THREE.Vector3(-5.2, 5.6, 7);
+      const target = new THREE.Vector3(...(stopIndex >= 0 ? mobileTargets[stopIndex] : point.t));
+      const position = new THREE.Vector3(...point.p);
+      return position.addScaledVector(position.clone().sub(target), 0.65);
+    }), false, "centripetal");
+    const frameCamera = (u: number) => {
+      positionCurve.getPoint(u, desiredPosition);
+      (camera.aspect < 0.85 ? mobileTargetCurve : targetCurve).getPoint(u, desiredTarget);
+      if (camera.aspect < 0.85) {
+        // Pull back to retain the whole island, then reserve the lower view for cards.
+        mobilePositionCurve.getPoint(u, desiredPosition);
+        const drop = desiredPosition.distanceTo(desiredTarget) * 0.32;
+        desiredTarget.y -= drop;
+      }
+    };
     const resize = () => {
       const { clientWidth: width, clientHeight: height } = canvas;
       if (!width || !height) return;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
+      camera.fov = width / height < 0.85 ? 64 : 52;
       camera.updateProjectionMatrix();
+      if (!frame) frame = window.requestAnimationFrame(render);
     };
 
     const updateStreaks = (time: number, delta: number) => {
@@ -1141,18 +1285,19 @@ export function WorldScene() {
     };
 
     const render = (timestamp: number) => {
-      frame = window.requestAnimationFrame(render);
-      const time = timestamp * 0.001;
-      const delta = Math.min(0.05, lastTime ? time - lastTime : 0.016);
-      lastTime = time;
+      frame = reducedMotion.matches ? 0 : window.requestAnimationFrame(render);
+      const seconds = timestamp * 0.001;
+      const delta = Math.min(0.05, lastTime ? seconds - lastTime : 0.016);
+      lastTime = seconds;
+      if (!reducedMotion.matches && frozenTime === null) elapsed += delta;
+      const time = reducedMotion.matches ? 0 : frozenTime ?? elapsed;
 
       if (!reducedMotion.matches) {
-        const u = scrollToU();
-        positionCurve.getPoint(u, desiredPosition);
-        targetCurve.getPoint(u, desiredTarget);
+        const u = devProgress === null ? scrollToU() : progressToU(devProgress);
+        frameCamera(u);
 
         lanterns.forEach((lantern, index) => {
-          lantern.position.y += Math.sin(time * 0.6 + index * 1.7) * 0.0035;
+          lantern.position.y = lantern.userData.baseY + Math.sin(time * 0.6 + index * 1.7) * 0.12;
           lantern.rotation.y = Math.sin(time * 0.3 + index) * 0.2;
           const halo = lantern.userData.halo as THREE.Sprite | undefined;
           if (halo) halo.material.opacity = 0.42 + Math.sin(time * 2.1 + index * 2.4) * 0.13;
@@ -1168,15 +1313,15 @@ export function WorldScene() {
 
         orbitCards.forEach((card) => placeOrbitCard(card, time));
 
-        for (let index = 0; index < petalPositions.count; index += 1) {
+        for (let index = 0; frozenTime === null && index < petalPositions.count; index += 1) {
           let y = petalPositions.getY(index) - petalSpeeds[index] * delta;
           if (y < -3) y += 15;
           petalPositions.setY(index, y);
-          petalPositions.setX(index, petalPositions.getX(index) + Math.sin(time * 0.8 + index) * 0.004);
+          petalPositions.setX(index, petalPositions.getX(index) + Math.sin(time * 0.8 + index) * delta * 0.24);
         }
         petalPositions.needsUpdate = true;
 
-        updateStreaks(time, delta);
+        if (frozenTime === null) updateStreaks(time, delta);
 
         if (sky) {
           const altitude = Math.min(34, Math.max(0, (camera.position.y - 2.4) * 4));
@@ -1184,17 +1329,19 @@ export function WorldScene() {
         }
       }
 
-      camera.position.x += (desiredPosition.x + pointerX * 1.1 - camera.position.x) * 0.055;
-      camera.position.y += (desiredPosition.y - pointerY * 0.8 - camera.position.y) * 0.055;
-      camera.position.z += (desiredPosition.z - camera.position.z) * 0.055;
-      currentTarget.lerp(desiredTarget, 0.055);
+      if (reducedMotion.matches) {
+        frameCamera(0);
+        camera.position.copy(desiredPosition);
+        currentTarget.copy(desiredTarget);
+        world.position.y = 0;
+        if (sky) sky.style.transform = "none";
+      } else {
+        const damping = 1 - Math.exp(-5 * delta);
+        camera.position.lerp(desiredPosition, damping);
+        currentTarget.lerp(desiredTarget, damping);
+      }
+      // A level horizon and time-based damping avoid scroll-induced rolling.
       camera.lookAt(currentTarget);
-
-      /* gentle banking on lateral movement, like a real flight */
-      const lateral = camera.position.x - previousCameraX;
-      previousCameraX = camera.position.x;
-      bank += (Math.max(-0.05, Math.min(0.05, -lateral * 0.5)) - bank) * 0.06;
-      camera.rotateZ(bank);
 
       renderer.render(scene, camera);
       canvas.classList.add("is-on");
@@ -1204,15 +1351,15 @@ export function WorldScene() {
        force a frame, so compositions can be verified from rendered stills */
     const devHook = {
       setProgress: (progress: number) => {
-        const u = progressToU(progress);
-        positionCurve.getPoint(u, desiredPosition);
-        targetCurve.getPoint(u, desiredTarget);
+        devProgress = progress;
+        frameCamera(reducedMotion.matches ? 0 : progressToU(progress));
         camera.position.copy(desiredPosition);
         currentTarget.copy(desiredTarget);
         camera.lookAt(currentTarget);
       },
       snap: (time = 0) => {
-        if (time > 0) {
+        frozenTime = time;
+        if (!reducedMotion.matches) {
           updateTwinkle(time);
           orbitCards.forEach((card) => placeOrbitCard(card, time));
         }
@@ -1223,8 +1370,17 @@ export function WorldScene() {
         renderer.setPixelRatio(1);
         renderer.setSize(width, height, false);
         camera.aspect = width / height;
+        camera.fov = width / height < 0.85 ? 64 : 52;
         camera.updateProjectionMatrix();
       },
+      resume: () => { devProgress = null; frozenTime = null; },
+      inspect: () => ({
+        position: camera.position.toArray(), target: currentTarget.toArray(),
+        calls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
+        geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
+        pixelRatio: renderer.getPixelRatio(), reducedMotion: reducedMotion.matches,
+        progress: devProgress, sectionAnchors: [...sectionCenters],
+      }),
       look: (px: number, py: number, pz: number, tx: number, ty: number, tz: number) => {
         desiredPosition.set(px, py, pz);
         desiredTarget.set(tx, ty, tz);
@@ -1233,13 +1389,8 @@ export function WorldScene() {
         camera.lookAt(currentTarget);
       },
     };
-    (window as unknown as { __nightflight?: typeof devHook }).__nightflight = devHook;
+    if (process.env.NODE_ENV !== "production") (window as unknown as { __nightflight?: typeof devHook }).__nightflight = devHook;
 
-    const onPointerMove = (event: PointerEvent) => {
-      if (event.pointerType === "touch") return;
-      pointerX = event.clientX / window.innerWidth - 0.5;
-      pointerY = event.clientY / window.innerHeight - 0.5;
-    };
     const onVisibilityChange = () => {
       if (document.hidden) {
         if (frame) {
@@ -1252,35 +1403,46 @@ export function WorldScene() {
       }
     };
 
+    const onMotionChange = () => {
+      lastTime = 0;
+      if (!frame) frame = window.requestAnimationFrame(render);
+    };
+    reducedMotion.addEventListener("change", onMotionChange);
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(canvas);
     const layoutObserver = new ResizeObserver(measureSections);
     layoutObserver.observe(document.body);
     resize();
     measureSections();
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
     document.addEventListener("visibilitychange", onVisibilityChange);
-    frame = window.requestAnimationFrame(render);
+    orbitCards.forEach((card) => placeOrbitCard(card, 0));
+    if (!frame) frame = window.requestAnimationFrame(render);
 
     return () => {
+      reducedMotion.removeEventListener("change", onMotionChange);
       resizeObserver.disconnect();
       layoutObserver.disconnect();
-      window.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       delete (window as unknown as { __nightflight?: unknown }).__nightflight;
       if (frame) window.cancelAnimationFrame(frame);
+      const geometries = new Set<THREE.BufferGeometry>();
+      const materials = new Set<THREE.Material>();
+      const textures = new Set<THREE.Texture>([glow, soft]);
       scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
-        mesh.geometry?.dispose();
+        if (object instanceof THREE.InstancedMesh) object.dispose();
+        if (mesh.geometry) geometries.add(mesh.geometry);
         if (!mesh.material) return;
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        materials.forEach((material) => {
-          (material as THREE.MeshBasicMaterial).map?.dispose();
-          material.dispose();
+        (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((material) => {
+          materials.add(material);
+          const map = (material as THREE.MeshBasicMaterial).map;
+          if (map) textures.add(map);
         });
       });
-      glow.dispose();
-      soft.dispose();
+      geometries.forEach((geometry) => geometry.dispose());
+      materials.forEach((material) => material.dispose());
+      textures.forEach((texture) => texture.dispose());
+      if (sky) sky.style.transform = "";
       renderer.dispose();
     };
   }, []);

@@ -25,7 +25,7 @@
    WorldScene translates it downward as the flight climbs. */
 .w-sky {
   position: fixed; top: -60vh; left: 0; right: 0; height: 175vh; z-index: 0;
-  background: linear-gradient(180deg, #070b24 0%, #141747 28%, #2b2058 48%, #482a5e 63%, #8a4952 78%, #cf744f 91%, #e08a5a 100%);
+  background: linear-gradient(180deg, #080f2b 0%, #202c50 28%, #4f5077 48%, #8f718d 68%, #d49b99 86%, #f2c1a5 100%);
   will-change: transform;
 }
 .w-canvas {
@@ -273,3 +273,46 @@
 .w-footer b { color: var(--text); }
 .w-footer a { color: var(--muted); }
 .w-footer a:hover { color: var(--text); }
+/* The landscape keeps its contrast while copy has a quiet reading surface. */
+.w-canvas.is-fallback {
+  opacity: 1;
+  background: url('/world-fallback.jpg') center / cover no-repeat;
+}
+.w-hero { position: relative; isolation: isolate; }
+.w-hero::before {
+  content: ""; position: absolute; inset: -70px -45px; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse, rgba(12, 18, 40, 0.72), rgba(12, 18, 40, 0) 72%);
+}
+.w-card { background: rgba(14, 21, 43, 0.86); }
+.w-final {
+  background: linear-gradient(180deg, rgba(14, 21, 43, 0.86), rgba(14, 21, 43, 0.65));
+  border-radius: 24px; padding: 40px 24px 0;
+}
+@media (max-width: 700px) {
+  .w-sec { padding-top: 32vh; min-height: 155vh; }
+  .w-sec .w-card { top: 32vh; }
+  .w-card { padding: 24px; }
+  .w-card--wide { width: 100%; }
+  .w-sec--hero { min-height: 100svh; padding-top: 34vh; padding-bottom: 60px; }
+  .w-hero h1 { font-size: clamp(46px, 12vw, 70px); }
+  .w-kicker { font-size: 9px; letter-spacing: 0.14em; margin-bottom: 18px; gap: 7px; }
+  .w-kicker i { width: 16px; }
+  .w-hero::before { inset: -20px -18px -60px; background: linear-gradient(180deg, transparent, rgba(12, 18, 40, 0.9) 18%); }
+  .w-nav { padding: 16px; }
+  .w-brand img { height: 26px; }
+  .w-nav-right { gap: 12px; }
+  .w-nav-link { font-size: 11px; }
+  .w-btn--small { padding: 9px 12px; font-size: 11px; }
+  .w-scrollcue { display: none; }
+  .w-sec--final { padding-top: 32vh; }
+  .w-final { padding: 28px 18px 0; }
+  .w-tracks { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .w-track { padding: 8px; gap: 7px; }
+  .w-track strong { font-size: 11px; }
+  .w-track small { font-size: 10px; }
+  .w-track b { font-size: 19px; }
+  .w-ks { width: 100%; }
+}
+@media (min-width: 701px) {
+  .w-hero::before { inset: -100px -65px; background: radial-gradient(ellipse, rgba(12, 18, 40, 0.8), rgba(12, 18, 40, 0) 74%); }
+}
