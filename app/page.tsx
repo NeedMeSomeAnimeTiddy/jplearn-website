@@ -137,16 +137,16 @@ export default function Home() {
         <section className="w-sec" data-stop="2">
           <div className="w-card w-reveal">
             <span className="w-eyebrow">The route · <b lang="ja">道</b></span>
-            <h2>Six islands, crossed in order.</h2>
+            <h2>Six islands, one route.</h2>
             <p>
               A 16-node curriculum graph runs from your first hiragana to N1. Blocks unlock at 80% mastery
-              of the one before — and every gate is soft: the app warns, you decide.
+              of the one before, and on the curriculum map every gate is soft: the app warns, you decide.
             </p>
             <div className="w-tracks">
-              {tracks.map((track, index) => (
+              {tracks.map((track) => (
                 <div className="w-track" key={track.name}>
                   <b lang="ja">{track.glyph}</b>
-                  <span><strong>{track.name}</strong><small>{index + 1} / 6 · {track.jp}</small></span>
+                  <span><strong>{track.name}</strong><small lang="ja">{track.jp}</small></span>
                 </div>
               ))}
             </div>

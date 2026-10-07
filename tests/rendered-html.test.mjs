@@ -22,7 +22,7 @@ test("server-renders the complete Night Flight landing page", async () => {
   assert.match(html, /<title>JPLearn — Step into Japanese<\/title>/i);
   assert.match(html, /Step into/);
   assert.match(html, /Menus you fly through, not tabs you hunt\./);
-  assert.match(html, /Six islands, crossed in order\./);
+  assert.match(html, /Six islands, one route\./);
   assert.match(html, /Seventeen lanterns, one flame\./);
   assert.match(html, /Gravity for what you learn\./);
   assert.match(html, /A guide who lives here\./);
