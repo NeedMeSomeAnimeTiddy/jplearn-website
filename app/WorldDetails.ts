@@ -48,22 +48,8 @@ export function islandDetails(radius: number) {
   const stone = new Blocks(), plants = new Blocks();
   const rand = random(Math.round(radius * 1000));
   const n = Math.round(radius * 22);
-  const rock = [0x617589, 0x71858e, 0x837e91, 0x535f77, 0x918895];
-  // Broken shelves and masonry-sized seams under the continuous terrain shell.
-  for (let row = 0; row < 5; row++) {
-    const y = -radius * (0.08 + row * 0.165);
-    const extent = [1.01, 0.93, 0.82, 0.73, 0.57][row];
-    for (let i = 0; i < n; i++) {
-      if (rand() < 0.24) continue;
-      const angle = (i + (row % 2) * 0.5) / n * Math.PI * 2;
-      const r = radius * extent;
-      const h = radius * (0.035 + rand() * 0.095);
-      stone.box([Math.cos(angle) * r, y, Math.sin(angle) * r], [radius * 0.09, h, radius * (0.09 + rand() * 0.04)], rock[(i + row) % rock.length], [0, -angle, 0]);
-      if (row < 2 && i % 3 === 0) {
-        plants.box([Math.cos(angle) * (r + 0.02), y + h * 0.55, Math.sin(angle) * (r + 0.02)], [radius * 0.095, radius * 0.012, radius * 0.11], 0x49745e, [0, -angle, 0]);
-      }
-    }
-  }
+  // Rock shelves are part of the continuous island shell; decorations only
+  // add roots and vegetation, avoiding overlapping cladding on the cliff faces.
   // Ragged hanging roots: short angular segments hug the rock instead of dangling
   // across bridge approaches. Fine leaves disappear only once they are subpixel.
   for (let i = 0; i < 18; i++) {

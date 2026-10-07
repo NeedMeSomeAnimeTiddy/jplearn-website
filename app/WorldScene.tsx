@@ -130,16 +130,18 @@ const M = {
    +0.07r so every existing landmark and bridge keeps its ground contact. */
 function makeRockIsland(radius: number, far = false) {
   const island = new THREE.Group();
-  const sides = 36;
-  const levels = [[0.07, 1], [-0.06, 1.02], [-0.2, 0.91], [-0.27, 0.94], [-0.49, 0.76], [-0.55, 0.8], [-0.81, 0.51], [-1.08, 0.24], [-1.22, 0.02]];
-  const palette = [0x568d78, 0x446b66, 0x71818c, 0x9b8593, 0x526779, 0x7b758b, 0x45566c, 0x39485f];
+  const sides = 32;
+  // One exposed shell: paired rings form actual stone shelves, without a second
+  // layer of intersecting cuboids or coplanar faces that flicker during flight.
+  const levels = [[0.07, 1], [-0.08, 1], [-0.08, 0.93], [-0.32, 0.9], [-0.32, 0.83], [-0.57, 0.77], [-0.57, 0.68], [-0.86, 0.53], [-0.86, 0.43], [-1.12, 0.22], [-1.23, 0.04]];
+  const palette = [0x487765, 0x72857f, 0x6d7887, 0x8b9297, 0x646e82, 0x788390, 0x59677c, 0x74808a, 0x515e75, 0x48566d];
   const vertices: number[] = [];
   const colors: number[] = [];
   const point = (level: number, i: number) => {
     const a = (i % sides) / sides * Math.PI * 2;
-    const crag = 1 + Math.sin(a * 7 + 0.4) * 0.035 + Math.cos(a * 11) * 0.022;
+    const crag = 1 + Math.sin(a * 5 + 0.4) * 0.045 + Math.cos(a * 9) * 0.025;
     const [y, r] = levels[level];
-    return new THREE.Vector3(Math.cos(a) * r * radius * crag, y * radius + (level === 0 ? 0 : Math.sin(a * 9 + level) * radius * 0.035), Math.sin(a) * r * radius * crag);
+    return new THREE.Vector3(Math.cos(a) * r * radius * crag, y * radius + (level === 0 ? 0 : Math.sin(a * 5 + 0.4) * radius * 0.028), Math.sin(a) * r * radius * crag);
   };
   const face = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, color: number, shade: number) => {
     const tint = new THREE.Color(color).multiplyScalar(shade * (far ? 0.9 : 1));
@@ -150,9 +152,11 @@ function makeRockIsland(radius: number, far = false) {
     face(new THREE.Vector3(0, radius * 0.07, 0), point(0, i + 1), point(0, i), 0x568d78, 0.94 + (i % 5) * 0.025);
     for (let level = 0; level < levels.length - 1; level++) {
       const a = point(level, i), b = point(level, i + 1), c = point(level + 1, i), d = point(level + 1, i + 1);
-      face(a, b, c, palette[level], 0.86 + (i % 4) * 0.055);
-      face(b, d, c, palette[level], 0.9 + (i % 3) * 0.05);
+      const shade = 0.92 + Math.sin(i * 1.7 + Math.floor(level / 2)) * 0.065;
+      face(a, b, c, palette[level], shade);
+      face(b, d, c, palette[level], shade);
     }
+    face(new THREE.Vector3(0, -radius * 1.25, 0), point(levels.length - 1, i), point(levels.length - 1, i + 1), 0x48566d, 0.9);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
@@ -534,29 +538,31 @@ function makeMoon(radius: number) {
   return moon;
 }
 
+/* Opaque, low-poly billows have readable volume without translucent box
+   overlaps. Faceted lobes preserve the world's angular art direction. */
 function makeCloud(scale: number, flat = false) {
-  const cloud = new THREE.Group();
-  const material = new THREE.MeshBasicMaterial({ color: 0xb3a4c8, transparent: true, opacity: flat ? 0.065 : 0.08, depthWrite: false });
-  const blobs = 4 + Math.floor(scale);
-  for (let index = 0; index < blobs; index += 1) {
-    const blob = new THREE.Mesh(new THREE.BoxGeometry(1.6 + (index % 3) * 0.8, 1.2 + (index % 3) * 0.3, 1.6 + (index % 3) * 0.8), material);
-    blob.position.set(index * 1.1 - blobs * 0.5, (index % 2) * 0.3, (index % 3) * 0.6 - 0.6);
-    blob.scale.y = flat ? 0.26 : 0.42;
-    cloud.add(blob);
-  }
-  const parts = cloud.children.map((object) => {
-    const mesh = object as THREE.Mesh;
-    mesh.updateMatrix();
-    mesh.geometry.applyMatrix4(mesh.matrix);
-    return mesh.geometry;
+  const lobes = [
+    [-2.35, -0.22, 0.02, 0.95, 0.63, 0.85],
+    [-1.25, 0.05, -0.2, 1.32, 0.95, 1.05],
+    [0, 0.48, 0, 1.48, 1.3, 1.2],
+    [1.35, 0.06, 0.1, 1.18, 1, 1.05],
+    [2.3, -0.28, 0, 0.88, 0.57, 0.75],
+    [-0.45, -0.26, 0.8, 1.2, 0.7, 0.86],
+    [0.7, -0.22, -0.65, 1.25, 0.7, 0.85],
+  ];
+  const parts = lobes.map(([x, y, z, rx, ry, rz]) => {
+    const geometry = new THREE.IcosahedronGeometry(1, 1);
+    geometry.scale(rx, ry, rz);
+    geometry.translate(x, y, z);
+    return geometry;
   });
-  const merged = mergeGeometries(parts);
-  if (merged) {
-    cloud.clear();
-    cloud.add(new THREE.Mesh(merged, material));
-    parts.forEach((part) => part.dispose());
-  }
-  cloud.scale.setScalar(scale);
+  const geometry = mergeGeometries(parts)!;
+  parts.forEach((part) => part.dispose());
+  const cloud = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({
+    color: flat ? 0xc4c8dd : 0xd1d5e4, emissive: 0x657189, emissiveIntensity: 0.35, flatShading: true,
+  }));
+  cloud.scale.set(scale, scale * (flat ? 0.58 : 0.95), scale * 0.9);
+  cloud.rotation.y = Math.sin(scale * 7.3) * 0.55;
   return cloud;
 }
 
@@ -1033,16 +1039,16 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     [-16, -8.8, 14, 5.5], [2, -7.9, -44, 6.5], [36, -7.4, -10, 5], [-34, -8.2, 2, 5.5],
   ];
   cloudSeaSpecs.forEach(([x, y, z, s]) => {
-    const cloud = makeCloud(s, true);
-    cloud.position.set(x, y, z);
+    const cloud = makeCloud(s * 0.60, true);
+    cloud.position.set(x, y - 4, z);
     world.add(cloud);
   });
   const midCloudSpecs: Array<[number, number, number, number]> = [
-    [-28, 10.5, -33, 2.6], [-2, 13, -36, 3.2], [14, 12, -30, 2.2], [24, 14, -44, 3.4], [-30, 12.5, -46, 2.4], [16, 17, -24, 2],
+    [-28, 10.5, -33, 2.6], [-2, 13, -36, 3.2], [26, 14, -32, 2.2], [32, 16, -48, 3.4], [-30, 12.5, -46, 2.4], [30, 19, -24, 2],
     [-40, 14, 8, 2.6], [-34, 8.5, -9, 1.8],
   ];
   midCloudSpecs.forEach(([x, y, z, s]) => {
-    const cloud = makeCloud(s);
+    const cloud = makeCloud(s * 0.7);
     cloud.position.set(x, y, z);
     world.add(cloud);
   });
