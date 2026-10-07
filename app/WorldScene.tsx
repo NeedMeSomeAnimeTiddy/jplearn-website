@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { islandDetails, roofDetails, shrineDetails, toriiDetails, blockPine, blockBlossom, courtyardDetails, pagodaDetails, compileBlockDetails, lanternField, stoneLanternDetails, signDetails, festivalDetails, streamDetails, bridgeDetails } from "./WorldDetails";
 
 /* A twilight floating-shrine world. Each scroll stop frames a purpose-built
    diorama: the grand gate, the shrine courtyard, six labeled curriculum
@@ -82,6 +83,24 @@ function glyphTexture(glyph: string, color = "#ffe9c7") {
   return texture;
 }
 
+/* One small atlas serves all six orbiting study cards. */
+function orbitCardAtlas() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 768; canvas.height = 96;
+  const context = canvas.getContext("2d");
+  if (context) TRACK_GLYPHS.forEach((glyph, index) => {
+    const x = index * 128;
+    context.fillStyle = "#efd8ad"; context.fillRect(x, 0, 128, 96);
+    context.strokeStyle = "#ad7b54"; context.lineWidth = 4; context.strokeRect(x + 7, 7, 114, 82);
+    context.fillStyle = "#695266"; context.font = '46px "Yu Gothic", sans-serif';
+    context.textAlign = "center"; context.textBaseline = "middle"; context.fillText(glyph, x + 64, 42);
+    context.fillStyle = "#b69978";
+    for (let line = 0; line < 3; line++) context.fillRect(x + 35 + line * 5, 69 + line * 5, 58 - line * 10, 2);
+  });
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 /* ---------- shared materials ---------- */
 const M = {
   rock: () => new THREE.MeshLambertMaterial({ color: 0x352a52, flatShading: true }),
@@ -150,7 +169,7 @@ function makeRockIsland(radius: number, far = false) {
     dummy.scale.set(radius * 0.045, length, radius * 0.045);
     dummy.rotation.set(0, -a, 0.12);
   });
-  island.add(moss);
+  island.add(moss, islandDetails(radius));
   return island;
 }
 
@@ -172,7 +191,9 @@ function makeRoof(width: number, height: number) {
   geometry.computeVertexNormals();
   const material = M.roof();
   material.side = THREE.DoubleSide;
-  return new THREE.Mesh(geometry, material);
+  const roof = new THREE.Group();
+  roof.add(new THREE.Mesh(geometry, material), roofDetails(width, height));
+  return roof;
 }
 
 function makeTorii(scale = 1, withShimenawa = false) {
@@ -207,6 +228,7 @@ function makeTorii(scale = 1, withShimenawa = false) {
       torii.add(shide);
     });
   }
+  torii.add(toriiDetails());
   torii.scale.setScalar(scale);
   return torii;
 }
@@ -245,44 +267,22 @@ function makeShrine(scale = 1) {
   const porch = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.12, 0.65), M.wood());
   porch.position.set(0, 0.3, 1.0);
   shrine.add(porch);
+  shrine.add(shrineDetails());
   shrine.scale.setScalar(scale);
   return shrine;
 }
 
 function makePine(scale = 1) {
   const pine = new THREE.Group();
-  const foliage = M.pine();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.8, 6), M.trunk());
-  trunk.position.y = 0.4;
-  const lower = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.05, 7), foliage);
-  lower.position.y = 1.05;
-  const upper = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.85, 7), foliage);
-  upper.position.y = 1.75;
-  pine.add(trunk, lower, upper);
+  pine.add(blockPine());
   pine.scale.setScalar(scale);
   return pine;
 }
 
-function makeBlossomTree(material: THREE.Material, scale = 1) {
+function makeBlossomTree(material: THREE.MeshLambertMaterial, scale = 1) {
   const tree = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.11, 0.9, 6), M.trunk());
-  trunk.position.y = 0.45;
-  const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.5, 5), M.trunk());
-  branch.position.set(0.25, 0.95, 0);
-  branch.rotation.z = -0.7;
-  tree.add(trunk, branch);
-  // Shared faceted clusters produce a broad, layered blossom canopy.
-  const canopy = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), material, 24);
-  const random = mulberry32(35);
-  scatterInstances(canopy, 24, (i, dummy) => {
-    const a = i * 2.39996;
-    const r = Math.sqrt(random()) * 0.66;
-    dummy.position.set(Math.cos(a) * r, 1.22 + random() * 0.4 - r * 0.16, Math.sin(a) * r * 0.75);
-    dummy.scale.set(0.25 + random() * 0.18, 0.16 + random() * 0.1, 0.25 + random() * 0.15);
-    dummy.rotation.set(random(), random(), random());
-    canopy.setColorAt(i, new THREE.Color().setRGB(1, 0.8 + random() * 0.2, 0.85 + random() * 0.15));
-  });
-  tree.add(canopy);
+  tree.add(blockBlossom(material.color.getHex()));
+  material.dispose();
   tree.scale.setScalar(scale);
   return tree;
 }
@@ -302,25 +302,11 @@ function makeStoneLantern(glow: THREE.Texture, scale = 1) {
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xffb45e, transparent: true, opacity: 0.55, depthWrite: false }));
   halo.scale.setScalar(1.15);
   halo.position.y = 0.72;
-  lantern.add(base, stem, chamber, roof, halo);
+  lantern.add(base, stem, chamber, roof, halo, stoneLanternDetails());
   lantern.scale.setScalar(scale);
   return lantern;
 }
 
-function makePaperLantern(glow: THREE.Texture) {
-  const lantern = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), M.paper());
-  body.scale.y = 1.25;
-  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.07, 8), new THREE.MeshBasicMaterial({ color: 0x3d2f4a }));
-  rim.position.y = 0.44;
-  const rimB = rim.clone();
-  rimB.position.y = -0.44;
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xffb45e, transparent: true, opacity: 0.5, depthWrite: false }));
-  halo.scale.setScalar(2.1);
-  lantern.add(body, rim, rimB, halo);
-  lantern.userData.halo = halo;
-  return lantern;
-}
 
 function makeKomainu() {
   const lion = new THREE.Group();
@@ -353,7 +339,9 @@ function makePagoda() {
     body.position.y = y + 0.3;
     const roof = makeRoof(width * 0.8, 0.45);
     roof.position.y = y + 0.56;
-    pagoda.add(body, roof);
+    const detail = pagodaDetails(width);
+    detail.position.y = y;
+    pagoda.add(body, roof, detail);
   });
   const finial = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.55, 5), M.gold());
   finial.position.y = 2.85;
@@ -412,7 +400,7 @@ function makeSign(glyph: string, faceAngle: number) {
     new THREE.MeshBasicMaterial({ map: glyphTexture(glyph), transparent: true, side: THREE.DoubleSide }),
   );
   face.position.set(0, 0.85, 0.035);
-  sign.add(board, face);
+  sign.add(board, face, signDetails());
   sign.rotation.y = faceAngle;
   return sign;
 }
@@ -456,6 +444,7 @@ function makeBridge(from: THREE.Vector3, to: THREE.Vector3, bow: number) {
       bridge.add(post);
     });
   });
+  bridge.add(bridgeDetails(from, to, bow));
   return bridge;
 }
 
@@ -550,7 +539,7 @@ function makeCloud(scale: number, flat = false) {
   const material = new THREE.MeshBasicMaterial({ color: 0xb3a4c8, transparent: true, opacity: flat ? 0.065 : 0.08, depthWrite: false });
   const blobs = 4 + Math.floor(scale);
   for (let index = 0; index < blobs; index += 1) {
-    const blob = new THREE.Mesh(new THREE.SphereGeometry(0.8 + (index % 3) * 0.4, 12, 8), material);
+    const blob = new THREE.Mesh(new THREE.BoxGeometry(1.6 + (index % 3) * 0.8, 1.2 + (index % 3) * 0.3, 1.6 + (index % 3) * 0.8), material);
     blob.position.set(index * 1.1 - blobs * 0.5, (index % 2) * 0.3, (index % 3) * 0.6 - 0.6);
     blob.scale.y = flat ? 0.26 : 0.42;
     cloud.add(blob);
@@ -614,11 +603,23 @@ function makeStarShell(count: number, radiusMin: number, radiusMax: number, colo
     geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3));
     material.vertexColors = true;
     const twinkleRandom = mulberry32(seed + 1);
-    points.userData.twinkle = {
-      amp: twinkle,
-      phases: Float32Array.from({ length: count }, () => twinkleRandom() * Math.PI * 2),
-      speeds: Float32Array.from({ length: count }, () => 1.6 + twinkleRandom() * 4.6),
+    const parameters = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      parameters[i * 3] = twinkleRandom() * Math.PI * 2;
+      parameters[i * 3 + 1] = 1.6 + twinkleRandom() * 4.6;
+      parameters[i * 3 + 2] = twinkle;
+    }
+    geometry.setAttribute("twinkleParameters", new THREE.BufferAttribute(parameters, 3));
+    const timeUniform = { value: 0 };
+    material.userData.twinkleTime = timeUniform;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.twinkleTime = timeUniform;
+      shader.vertexShader = "attribute vec3 twinkleParameters;\nuniform float twinkleTime;\n" + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace("#include <color_vertex>",
+        "#include <color_vertex>\nvColor *= 1.0 - twinkleParameters.z * (0.5 + 0.5 * sin(twinkleTime * twinkleParameters.y + twinkleParameters.x));");
     };
+    material.customProgramCacheKey = () => "world-star-twinkle-v1";
+
   }
   return points;
 }
@@ -656,7 +657,8 @@ function batchStaticGeometry(world: THREE.Group, animated: THREE.Object3D[]) {
     if (!(object instanceof THREE.Mesh) || object instanceof THREE.InstancedMesh || excluded.has(object)) return;
     const material = object.material as THREE.MeshLambertMaterial;
     if (Array.isArray(material) || material.transparent || material.map) return;
-    const key = JSON.stringify([material.type, material.color?.getHex(), material.emissive?.getHex(), material.flatShading, material.vertexColors, material.side, material.fog]);
+    const position = new THREE.Vector3().setFromMatrixPosition(object.matrixWorld);
+    const key = JSON.stringify([material.type, material.emissive?.getHex(), material.side, material.fog, Math.round(position.x / 16), Math.round(position.z / 16)]);
     const bucket = buckets.get(key) ?? [];
     bucket.push(object);
     buckets.set(key, bucket);
@@ -669,12 +671,26 @@ function batchStaticGeometry(world: THREE.Group, animated: THREE.Object3D[]) {
       const geometry = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
       geometry.deleteAttribute("uv");
       geometry.applyMatrix4(mesh.matrixWorld);
+      const material = mesh.material as THREE.MeshLambertMaterial;
+      const count = geometry.getAttribute("position").count;
+      const existing = material.vertexColors ? geometry.getAttribute("color") : undefined;
+      const colors = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        colors[i * 3] = (existing?.getX(i) ?? 1) * material.color.r;
+        colors[i * 3 + 1] = (existing?.getY(i) ?? 1) * material.color.g;
+        colors[i * 3 + 2] = (existing?.getZ(i) ?? 1) * material.color.b;
+      }
+      geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
       return geometry;
     });
     const merged = mergeGeometries(parts);
     parts.forEach((part) => part.dispose());
     if (!merged) return;
-    world.add(new THREE.Mesh(merged, meshes[0].material));
+    const material = (meshes[0].material as THREE.MeshLambertMaterial).clone();
+    material.color.setHex(0xffffff);
+    material.vertexColors = true;
+    material.flatShading = true;
+    world.add(new THREE.Mesh(merged, material));
     meshes.forEach((mesh) => {
       retiredGeometry.add(mesh.geometry);
       retiredMaterials.add(mesh.material as THREE.Material);
@@ -695,11 +711,12 @@ function batchStaticGeometry(world: THREE.Group, animated: THREE.Object3D[]) {
 
 function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   const world = new THREE.Group();
-  const lanterns: THREE.Group[] = [];
+  const lanterns = lanternField(glow);
+  world.add(lanterns.bodies, lanterns.halos);
 
   /* main island — gate, courtyard, garden */
   const island = makeRockIsland(6.4);
-  world.add(island);
+  world.add(island, courtyardDetails(), streamDetails(), festivalDetails());
 
   const grandTorii = makeTorii(1.2, true);
   grandTorii.position.set(0, 0.42, 4.6);
@@ -713,13 +730,6 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   komainuB.rotation.y = -0.15;
   komainuB.scale.x = -1;
   world.add(komainuA, komainuB);
-
-  const stoneMaterial = M.stone();
-  for (let index = 0; index < 8; index += 1) {
-    const stepStone = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.07, 6), stoneMaterial);
-    stepStone.position.set(Math.sin(index * 1.3) * 0.35, 0.46, 4 - index * 0.95);
-    world.add(stepStone);
-  }
 
   const shrine = makeShrine(1.05);
   shrine.position.set(-1.8, 0.45, -2.9);
@@ -797,7 +807,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   world.add(bridge);
 
   /* grass, rocks, drifting pebbles (instanced) */
-  const grass = new THREE.InstancedMesh(new THREE.ConeGeometry(0.055, 0.24, 4), new THREE.MeshLambertMaterial({ color: 0x3f7a68, flatShading: true }), 70);
+  const grass = new THREE.InstancedMesh(new THREE.BoxGeometry(0.055, 0.24, 0.055), new THREE.MeshLambertMaterial({ color: 0x3f7a68, flatShading: true }), 70);
   scatterInstances(grass, 70, (index, dummy) => {
     const angle = index * 2.39996; // golden angle spiral over the island top
     const radius = 1.1 + (index % 47) / 47 * 4.9;
@@ -988,19 +998,6 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   wireGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(wirePositions), 3));
   world.add(new THREE.LineSegments(wireGeometry, new THREE.LineBasicMaterial({ color: 0x8d7fb8, transparent: true, opacity: 0.5 })));
 
-  for (let index = 0; index < 17; index += 1) {
-    const lantern = makePaperLantern(glow);
-    lantern.position.set(
-      -14 + (((index * 29) % 23) / 22 - 0.5) * 11,
-      4.2 + (((index * 41) % 19) / 18 - 0.5) * 6.5,
-      -14 + (((index * 13) % 17) / 16 - 0.5) * 11,
-    );
-    lantern.scale.setScalar(0.5 + ((index * 7) % 10) / 20);
-    world.add(lantern);
-    lantern.userData.baseY = lantern.position.y;
-    lanterns.push(lantern);
-  }
-
   /* memory orrery — rings and orbiting cards in its own open sky,
      well clear of the lantern festival */
   const orrery = new THREE.Group();
@@ -1010,13 +1007,18 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   coreHalo.scale.setScalar(4);
   orrery.add(core, coreHalo);
   const orbitCards: THREE.Mesh[] = [];
+  const cardMaterial = new THREE.MeshBasicMaterial({ map: orbitCardAtlas(), side: THREE.DoubleSide });
   const ringSpecs: Array<[number, number, number]> = [[1.3, 0.5, 0.35], [2.1, -0.35, 0.42], [2.9, 0.25, -0.3]];
   ringSpecs.forEach(([radius, tiltX, tiltZ], ringIndex) => {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.025, 6, 60), new THREE.MeshBasicMaterial({ color: 0xcdb8ff, transparent: true, opacity: 0.5 }));
     ring.rotation.set(Math.PI / 2 + tiltX, 0, tiltZ);
     orrery.add(ring);
     for (let cardIndex = 0; cardIndex < 2; cardIndex += 1) {
-      const card = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.3), new THREE.MeshBasicMaterial({ color: 0xffd9a0, side: THREE.DoubleSide }));
+      const cardGeometry = new THREE.PlaneGeometry(0.44, 0.3);
+      const uv = cardGeometry.getAttribute("uv");
+      const atlasIndex = ringIndex * 2 + cardIndex;
+      for (let vertex = 0; vertex < uv.count; vertex++) uv.setX(vertex, (atlasIndex + 0.02 + uv.getX(vertex) * 0.96) / 6);
+      const card = new THREE.Mesh(cardGeometry, cardMaterial);
       card.userData = { radius, tiltX, tiltZ, angle: cardIndex * Math.PI + ringIndex, speed: 0.28 - ringIndex * 0.07 };
       orrery.add(card);
       orbitCards.push(card);
@@ -1102,9 +1104,20 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     return streak;
   });
 
-  batchStaticGeometry(world, [...lanterns, ...orbitCards, moon]);
+  const detailStats = compileBlockDetails(world);
+  batchStaticGeometry(world, [...orbitCards, moon]);
+  const prune = (object: THREE.Object3D) => {
+    [...object.children].forEach(prune);
+    if (object !== world && object instanceof THREE.Group && object.children.length === 0) object.removeFromParent();
+  };
+  prune(world);
+  const moving = new Set<THREE.Object3D>([world, ...orbitCards, moon, fireflies, pebbles, ...streaks]);
+  world.traverse((object) => {
+    object.updateMatrix();
+    if (!moving.has(object)) object.matrixAutoUpdate = false;
+  });
 
-  return { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon };
+  return { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon, detailStats };
 }
 
 type StreakState = { active: boolean; life: number; nextAt: number; velocity: THREE.Vector3 };
@@ -1137,9 +1150,19 @@ export function WorldScene() {
 
     const glow = glowTexture("rgba(255,220,170,1)", "rgba(255,160,80,0.35)");
     const soft = glowTexture("rgba(255,255,255,1)", "rgba(255,255,255,0.3)");
-    const { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon } = buildWorld(glow, soft);
+    const { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon, detailStats } = buildWorld(glow, soft);
     scene.add(world);
 
+    const fineBatches: THREE.InstancedMesh[] = [];
+    world.traverse((object) => { if (object instanceof THREE.InstancedMesh && object.userData.detailDistance) fineBatches.push(object); });
+    const detailCenter = new THREE.Vector3();
+    const updateDetailVisibility = () => {
+      fineBatches.forEach((mesh) => {
+        detailCenter.copy(mesh.boundingSphere!.center).add(world.position);
+        const reach = mesh.userData.detailDistance + mesh.boundingSphere!.radius;
+        mesh.visible = detailCenter.distanceToSquared(camera.position) < reach * reach;
+      });
+    };
     const sky = document.querySelector<HTMLElement>(".w-sky");
 
     /* stop-aware spline: sections map to stop control points, with shaping
@@ -1174,6 +1197,7 @@ export function WorldScene() {
       active: false, life: 0, nextAt: 3 + index * 5, velocity: new THREE.Vector3(),
     }));
 
+    let contextLost = false;
     let frame = 0;
     let lastTime = 0;
     let devProgress: number | null = null;
@@ -1228,12 +1252,12 @@ export function WorldScene() {
     const resize = () => {
       const { clientWidth: width, clientHeight: height } = canvas;
       if (!width || !height) return;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(2_500_000 / (width * height))));
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.fov = width / height < 0.85 ? 64 : 52;
       camera.updateProjectionMatrix();
-      if (!frame) frame = window.requestAnimationFrame(render);
+      if (!frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
     };
 
     const updateStreaks = (time: number, delta: number) => {
@@ -1260,17 +1284,12 @@ export function WorldScene() {
       });
     };
 
+    // Three scalar uniform updates replace per-star CPU work and colour uploads.
     const twinkleLayers = [stars, starsFine, starsBright];
     const updateTwinkle = (time: number) => {
       twinkleLayers.forEach((layer) => {
-        const twinkle = layer.userData.twinkle as { amp: number; phases: Float32Array; speeds: Float32Array } | undefined;
-        if (!twinkle) return;
-        const colors = layer.geometry.getAttribute("color") as THREE.BufferAttribute;
-        for (let index = 0; index < twinkle.phases.length; index += 1) {
-          const level = 1 - twinkle.amp * (0.5 + 0.5 * Math.sin(time * twinkle.speeds[index] + twinkle.phases[index]));
-          colors.setXYZ(index, level, level, level);
-        }
-        colors.needsUpdate = true;
+        const uniform = layer.material.userData.twinkleTime as { value: number } | undefined;
+        if (uniform) uniform.value = time;
       });
     };
 
@@ -1285,6 +1304,7 @@ export function WorldScene() {
     };
 
     const render = (timestamp: number) => {
+      if (contextLost) { frame = 0; return; }
       frame = reducedMotion.matches ? 0 : window.requestAnimationFrame(render);
       const seconds = timestamp * 0.001;
       const delta = Math.min(0.05, lastTime ? seconds - lastTime : 0.016);
@@ -1296,12 +1316,7 @@ export function WorldScene() {
         const u = devProgress === null ? scrollToU() : progressToU(devProgress);
         frameCamera(u);
 
-        lanterns.forEach((lantern, index) => {
-          lantern.position.y = lantern.userData.baseY + Math.sin(time * 0.6 + index * 1.7) * 0.12;
-          lantern.rotation.y = Math.sin(time * 0.3 + index) * 0.2;
-          const halo = lantern.userData.halo as THREE.Sprite | undefined;
-          if (halo) halo.material.opacity = 0.42 + Math.sin(time * 2.1 + index * 2.4) * 0.13;
-        });
+        lanterns.update(time);
 
         world.position.y = Math.sin(time * 0.4) * 0.12;
         fireflies.rotation.y = time * 0.02;
@@ -1343,6 +1358,7 @@ export function WorldScene() {
       // A level horizon and time-based damping avoid scroll-induced rolling.
       camera.lookAt(currentTarget);
 
+      updateDetailVisibility();
       renderer.render(scene, camera);
       canvas.classList.add("is-on");
     };
@@ -1363,7 +1379,7 @@ export function WorldScene() {
           updateTwinkle(time);
           orbitCards.forEach((card) => placeOrbitCard(card, time));
         }
-        renderer.render(scene, camera);
+        if (!contextLost) { updateDetailVisibility(); renderer.render(scene, camera); }
         return canvas;
       },
       setSize: (width: number, height: number) => {
@@ -1379,7 +1395,7 @@ export function WorldScene() {
         calls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
         geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
         pixelRatio: renderer.getPixelRatio(), reducedMotion: reducedMotion.matches,
-        progress: devProgress, sectionAnchors: [...sectionCenters],
+        progress: devProgress, sectionAnchors: [...sectionCenters], contextLost, ...detailStats,
       }),
       look: (px: number, py: number, pz: number, tx: number, ty: number, tz: number) => {
         desiredPosition.set(px, py, pz);
@@ -1397,15 +1413,32 @@ export function WorldScene() {
           window.cancelAnimationFrame(frame);
           frame = 0;
         }
-      } else if (!frame) {
+      } else if (!frame && !contextLost) {
         lastTime = 0;
         frame = window.requestAnimationFrame(render);
       }
     };
 
+    // Preserve Claude's driver-crash fallback and context recovery from 8df52c4.
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      contextLost = true;
+      if (frame) { window.cancelAnimationFrame(frame); frame = 0; }
+      canvas.classList.remove("is-on");
+      canvas.classList.add("is-fallback");
+    };
+    const onContextRestored = () => {
+      contextLost = false;
+      canvas.classList.remove("is-fallback");
+      lastTime = 0;
+      if (!frame && !document.hidden) frame = window.requestAnimationFrame(render);
+    };
+    canvas.addEventListener("webglcontextlost", onContextLost);
+    canvas.addEventListener("webglcontextrestored", onContextRestored);
+
     const onMotionChange = () => {
       lastTime = 0;
-      if (!frame) frame = window.requestAnimationFrame(render);
+      if (!frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
     };
     reducedMotion.addEventListener("change", onMotionChange);
     const resizeObserver = new ResizeObserver(resize);
@@ -1416,9 +1449,11 @@ export function WorldScene() {
     measureSections();
     document.addEventListener("visibilitychange", onVisibilityChange);
     orbitCards.forEach((card) => placeOrbitCard(card, 0));
-    if (!frame) frame = window.requestAnimationFrame(render);
+    if (!frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
 
     return () => {
+      canvas.removeEventListener("webglcontextlost", onContextLost);
+      canvas.removeEventListener("webglcontextrestored", onContextRestored);
       reducedMotion.removeEventListener("change", onMotionChange);
       resizeObserver.disconnect();
       layoutObserver.disconnect();

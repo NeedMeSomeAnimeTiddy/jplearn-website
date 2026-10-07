@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
 const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || "msedge", headless: true });
 const origin = process.env.WORLD_URL || "http://localhost:3000";
-const directory = "outputs/world-review";
+const directory = process.env.WORLD_OUTPUT_DIRECTORY || "outputs/world-review";
 const results = [];
 const errors = [];
 const hideCopy = ".w main,.w-nav,.w-rail { visibility:hidden !important; } .w-canvas { transition:none !important; }";
@@ -18,6 +18,9 @@ await fs.mkdir(directory, { recursive: true });
 async function open(options) {
   const page = await browser.newPage({ deviceScaleFactor: 1, ...options });
   page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error" && /THREE.WebGLProgram|Shader Error|VALIDATE_STATUS/.test(message.text())) errors.push(message.text());
+  });
   await page.goto(origin, { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.__nightflight);
   await page.addStyleTag({ content: "html { scroll-behavior:auto !important; }" });
@@ -46,6 +49,8 @@ try {
         assert.ok(Math.abs(natural.position[axis] - exact.position[axis]) < 0.08, `${name} stop ${stop} camera must settle at its waypoint`);
       }
       assert.ok(natural.pixelRatio <= 1.5);
+      assert.ok(natural.calls <= 140, `${name} stop ${stop} exceeds the 140 draw-call budget`);
+      assert.ok(natural.triangles <= 175_000, `${name} stop ${stop} exceeds the 175k triangle budget`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "no horizontal overflow");
       results.push({ viewport: name, stop, ...natural });
     }
@@ -77,6 +82,25 @@ try {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.waitForTimeout(1800);
   assert.notDeepEqual((await page.evaluate(() => window.__nightflight.inspect())).position, hero.position);
+  // A real driver-context loss must cancel rendering and survive preference/resize
+  // callbacks. Restoring the same context must re-upload the instanced geometry.
+  const supportsLoss = await page.evaluate(() => {
+    const extension = document.querySelector(".w-canvas").getContext("webgl2").getExtension("WEBGL_lose_context");
+    window.__contextLossTest = extension;
+    if (extension) extension.loseContext();
+    return Boolean(extension);
+  });
+  assert.ok(supportsLoss, "browser must expose WEBGL_lose_context for this regression check");
+  await page.waitForSelector(".w-canvas.is-fallback");
+  assert.equal(await page.evaluate(() => window.__nightflight.inspect().contextLost), true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator(".w-canvas").evaluate((canvas) => canvas.classList.contains("is-fallback")), true);
+  await page.evaluate(() => window.__contextLossTest.restoreContext());
+  await page.waitForSelector(".w-canvas.is-on:not(.is-fallback)");
+  assert.equal(await page.evaluate(() => window.__nightflight.inspect().contextLost), false);
+  assert.ok(await page.evaluate(() => window.__nightflight.inspect().calls > 0));
   await page.close();
 
   const reduced = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, reducedMotion: "reduce" });
@@ -87,6 +111,10 @@ try {
   await reduced.evaluate(() => window.scrollTo({ top: 5000, behavior: "instant" }));
   await reduced.waitForTimeout(300);
   assert.ok(initialStill.equals(await reduced.screenshot()), "initial reduced-motion scene must stay still");
+  await reduced.setViewportSize({ width: 2560, height: 1440 });
+  await reduced.waitForTimeout(200);
+  const pixels = await reduced.locator(".w-canvas").evaluate((canvas) => canvas.width * canvas.height);
+  assert.ok(pixels <= 2_500_000, "large displays respect the total framebuffer pixel budget");
   await reduced.close();
 
   const fallback = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -104,7 +132,7 @@ try {
   await fallback.screenshot({ path: `${directory}/fallback-check.png` });
   assert.deepEqual(errors, [], "no application errors during browser checks");
   await fs.writeFile(`${directory}/stats.json`, JSON.stringify(results, null, 2));
-  console.log("PASS: 16 waypoint captures, scroll alignment, DPR cap, reduced motion, resume, and WebGL fallback.");
+  console.log("PASS: 16 waypoint captures, scroll alignment, DPR cap, reduced motion, resume, WebGL fallback/context recovery, and framebuffer budget.");
 } finally {
   await browser.close();
 }
