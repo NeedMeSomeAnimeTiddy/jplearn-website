@@ -1238,6 +1238,11 @@ export function WorldScene() {
 
     const onPointerMove = (event: PointerEvent) => {
       if (event.pointerType === "touch") return;
+      if (reducedMotion.matches) {
+        pointerX = 0;
+        pointerY = 0;
+        return;
+      }
       pointerX = event.clientX / window.innerWidth - 0.5;
       pointerY = event.clientY / window.innerHeight - 0.5;
     };
@@ -1247,10 +1252,29 @@ export function WorldScene() {
           window.cancelAnimationFrame(frame);
           frame = 0;
         }
-      } else if (!frame) {
+      } else if (!frame && !contextLost) {
         lastTime = 0;
         frame = window.requestAnimationFrame(render);
       }
+    };
+
+    /* If the GPU driver crashes mid-visit, show the still until (if ever) the context returns. */
+    let contextLost = false;
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      contextLost = true;
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
+      canvas.classList.remove("is-on");
+      canvas.classList.add("is-fallback");
+    };
+    const onContextRestored = () => {
+      contextLost = false;
+      canvas.classList.remove("is-fallback");
+      lastTime = 0;
+      if (!frame && !document.hidden) frame = window.requestAnimationFrame(render);
     };
 
     const resizeObserver = new ResizeObserver(resize);
@@ -1261,6 +1285,8 @@ export function WorldScene() {
     measureSections();
     window.addEventListener("pointermove", onPointerMove, { passive: true });
     document.addEventListener("visibilitychange", onVisibilityChange);
+    canvas.addEventListener("webglcontextlost", onContextLost);
+    canvas.addEventListener("webglcontextrestored", onContextRestored);
     frame = window.requestAnimationFrame(render);
 
     return () => {
@@ -1268,6 +1294,8 @@ export function WorldScene() {
       layoutObserver.disconnect();
       window.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      canvas.removeEventListener("webglcontextlost", onContextLost);
+      canvas.removeEventListener("webglcontextrestored", onContextRestored);
       delete (window as unknown as { __nightflight?: unknown }).__nightflight;
       if (frame) window.cancelAnimationFrame(frame);
       scene.traverse((object) => {

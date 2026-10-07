@@ -1,11 +1,9 @@
 import type { MetadataRoute } from "next";
-import { getBaseUrl } from "./site-url";
+import { SITE_URL } from "./site-url";
 
-export default async function robots(): Promise<MetadataRoute.Robots> {
-  const baseUrl = await getBaseUrl();
-
+export default function robots(): MetadataRoute.Robots {
   return {
     rules: { userAgent: "*", allow: "/" },
-    sitemap: `${baseUrl}/sitemap.xml`,
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }
