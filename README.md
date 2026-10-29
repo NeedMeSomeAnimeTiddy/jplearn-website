@@ -40,12 +40,31 @@ npm run lint
   ambient animation stops.
 - `public/og.jpg` is a hand-drawn 1200×630 social card matching the site's night scene.
 
+## How the world boots
+
+The server HTML paints `public/world-fallback.jpg` as a fixed full-viewport still
+(`.w-still`) from the first frame. three.js is not imported until the page has
+fired `load` and the browser reports idle time (`requestIdleCallback`, 2 s
+timeout). Before mounting, `app/page.tsx` probes a throwaway WebGL context with
+`failIfMajorPerformanceCaveat`; when there is no hardware context, or the renderer
+string names a software rasteriser (SwiftShader, llvmpipe, softpipe, Microsoft
+Basic Render, anything "Software"), the scene never mounts and the still stays.
+`WorldScene` asks for the same caveat when it creates its renderer, builds the
+world in stages that yield to the browser, and awaits `compileAsync` before the
+first frame. Only then does the canvas fade in, and the still fades out with it.
+Reduced motion follows the same path and replaces the still with one parked frame.
+
+In development, `?world=force` skips the software check (and the renderer's
+caveat), so headless browsers on SwiftShader can still run the live scene. Like
+the dev hook below, it is absent from production builds.
+
 ## World review and screenshots
 
-With `npm run dev` running, the optional browser check scrolls through all eight
-stops at 1280×800 and 390×844, checks camera alignment and reduced motion, and
-simulates WebGL failure. It writes screenshots and render counts to the ignored
-`outputs/world-review/` directory.
+With `npm run dev` running, the optional browser check confirms that a software
+renderer keeps the still without fetching three.js, then loads `?world=force` to
+scroll through all eight stops at 1280×800 and 390×844, check camera alignment
+and reduced motion, and simulate WebGL failure. It writes screenshots and render
+counts to the ignored `outputs/world-review/` directory.
 
 ```bash
 node tests/world-scene.browser.mjs

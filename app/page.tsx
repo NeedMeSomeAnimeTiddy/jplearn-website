@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -8,6 +8,30 @@ import { GITHUB_URL, GITHUB_WATCH_URL, tracks, modes, faq } from "./content";
 import "./world.css";
 
 const WorldScene = dynamic(() => import("./WorldScene").then((module) => module.WorldScene), { ssr: false });
+
+/* Dev-only: ?world=force skips the software-renderer check so headless browser
+   checks (SwiftShader) can still drive the live scene. Absent in production. */
+function worldForced() {
+  return process.env.NODE_ENV !== "production" && new URLSearchParams(window.location.search).get("world") === "force";
+}
+
+/* Runs before three.js is imported: a throwaway context tells us whether WebGL is
+   hardware-backed. Software renderers turn every frame into a long task, so those
+   visitors keep the still. */
+function hasHardwareWebGL() {
+  const probe = document.createElement("canvas");
+  const options: WebGLContextAttributes = { failIfMajorPerformanceCaveat: true };
+  try {
+    const gl = probe.getContext("webgl2", options) ?? probe.getContext("webgl", options);
+    if (!gl) return false;
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? "");
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return !/swiftshader|llvmpipe|softpipe|microsoft basic render|software/i.test(renderer);
+  } catch {
+    return false;
+  }
+}
 
 const stops = ["The gate", "Threshold", "The route", "Lanterns", "Memory", "Tutor", "Stars", "Landing"];
 const modeCategories = ["Recognition", "Recall", "Challenge", "Listening", "Blended"] as const;
@@ -23,6 +47,29 @@ function FaqStructuredData() {
 
 export default function Home() {
   const pageRef = useRef<HTMLDivElement>(null);
+  const [world, setWorld] = useState<{ forced: boolean } | null>(null);
+
+  /* Mounting WorldScene is what imports three.js, so wait until the page has
+     loaded and the main thread is idle; the still covers the sky until then. */
+  useEffect(() => {
+    let idle = 0;
+    let timer = 0;
+    const boot = () => {
+      const forced = worldForced();
+      if (forced || hasHardwareWebGL()) setWorld({ forced });
+    };
+    const schedule = () => {
+      if (typeof window.requestIdleCallback === "function") idle = window.requestIdleCallback(boot, { timeout: 2000 });
+      else timer = window.setTimeout(boot, 0);
+    };
+    if (document.readyState === "complete") schedule();
+    else window.addEventListener("load", schedule, { once: true });
+    return () => {
+      window.removeEventListener("load", schedule);
+      if (idle) window.cancelIdleCallback(idle);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     const page = pageRef.current;
@@ -64,7 +111,10 @@ export default function Home() {
   return (
     <div className="w" ref={pageRef}>
       <div className="w-sky" aria-hidden="true" />
-      <WorldScene />
+      {world && <WorldScene allowSoftwareRenderer={world.forced} />}
+      {/* The still paints with the page; world.css fades it once the canvas is live. */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- a fixed backdrop, not content imagery */}
+      <img className="w-still" src="/world-fallback.jpg" alt="" aria-hidden="true" fetchPriority="high" decoding="async" />
 
       <header className="w-nav">
         <Link className="w-brand" href="/">

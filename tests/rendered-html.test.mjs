@@ -33,6 +33,17 @@ test("server-renders the complete Night Flight landing page", async () => {
   assert.match(html, /Interleave Mix/);
 });
 
+test("paints the world still before any three.js code loads", async () => {
+  const html = await (await render("/")).text();
+  const still = html.match(/<img[^>]*class="w-still"[^>]*>/)?.[0] ?? "";
+  assert.match(still, /src="\/world-fallback\.jpg"/);
+  assert.match(still, /alt=""/);
+  assert.match(still, /aria-hidden="true"/);
+  assert.match(still, /fetchpriority="high"/i);
+  assert.doesNotMatch(still, /loading="lazy"/);
+  assert.doesNotMatch(html, /class="w-canvas/, "the canvas mounts only on the client, after load");
+});
+
 test("gives visitors a real, working call to action", async () => {
   const html = await (await render("/")).text();
   assert.match(html, /href="https:\/\/github\.com\/NeedMeSomeAnimeTiddy\/JPLearn\/subscription"/);

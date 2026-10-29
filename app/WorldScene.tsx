@@ -715,7 +715,16 @@ function batchStaticGeometry(world: THREE.Group, animated: THREE.Object3D[]) {
 
 /* ---------- world assembly ---------- */
 
-function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
+/* Lets input and paint run between build stages. scheduler.yield resumes ahead of
+   other queued tasks where supported; setTimeout still yields in hidden tabs, where
+   a frame would never come. */
+function yieldToBrowser() {
+  const { scheduler } = globalThis as unknown as { scheduler?: { yield?: () => Promise<void> } };
+  return scheduler?.yield ? scheduler.yield() : new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+/* Stages are split only at yields, never reordered, so the world is identical. */
+async function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   const world = new THREE.Group();
   const lanterns = lanternField(glow);
   world.add(lanterns.bodies, lanterns.halos);
@@ -811,6 +820,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   /* the bridge spans grass edge to islet surface — feet on both islands */
   const bridge = makeBridge(new THREE.Vector3(-5.6, 0.43, 1.83), new THREE.Vector3(-7.65, -0.58, 2.5), 0.5);
   world.add(bridge);
+  await yieldToBrowser();
 
   /* grass, rocks, drifting pebbles (instanced) */
   const grass = new THREE.InstancedMesh(new THREE.BoxGeometry(0.055, 0.24, 0.055), new THREE.MeshLambertMaterial({ color: 0x3f7a68, flatShading: true }), 70);
@@ -960,6 +970,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   const ropeGeometry = new THREE.BufferGeometry();
   ropeGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(ropePositions), 3));
   world.add(new THREE.LineSegments(ropeGeometry, new THREE.LineBasicMaterial({ color: 0x8d7fb8, transparent: true, opacity: 0.55 })));
+  await yieldToBrowser();
 
   /* lantern festival — platform, poles, strung garlands, floating field */
   const platform = makeRockIsland(1.7, true);
@@ -1052,6 +1063,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
     cloud.position.set(x, y, z);
     world.add(cloud);
   });
+  await yieldToBrowser();
 
   /* the torii constellation — progress written in stars */
   const constellation = new THREE.Group();
@@ -1111,6 +1123,7 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
   });
 
   const detailStats = compileBlockDetails(world);
+  await yieldToBrowser();
   batchStaticGeometry(world, [...orbitCards, moon]);
   const prune = (object: THREE.Object3D) => {
     [...object.children].forEach(prune);
@@ -1128,365 +1141,405 @@ function buildWorld(glow: THREE.Texture, soft: THREE.Texture) {
 
 type StreakState = { active: boolean; life: number; nextAt: number; velocity: THREE.Vector3 };
 
-export function WorldScene() {
+/* Builds the world in stages that yield to the browser, then runs it until the
+   returned cleanup is called. Nothing is returned when there is nothing to stop. */
+async function startWorld(canvas: HTMLCanvasElement, allowSoftwareRenderer: boolean, unmounted: () => boolean) {
+  let renderer: THREE.WebGLRenderer;
+  try {
+    // Software WebGL makes every frame a long task, so it gets the still instead.
+    renderer = new THREE.WebGLRenderer({
+      canvas, alpha: true, antialias: true, powerPreference: "default", failIfMajorPerformanceCaveat: !allowSoftwareRenderer,
+    });
+  } catch {
+    canvas.classList.add("is-fallback", "is-on");
+    return;
+  }
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x555378, 0.007);
+  const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 300);
+
+  const hemisphere = new THREE.HemisphereLight(0xb9c8f5, 0x605977, 1.65);
+  const warm = new THREE.DirectionalLight(0xffd1a3, 2.0);
+  warm.position.set(-14, 6, 10);
+  const cool = new THREE.DirectionalLight(0x9dbdff, 1.1);
+  cool.position.set(10, 14, -8);
+  scene.add(hemisphere, warm, cool);
+
+  const glow = glowTexture("rgba(255,220,170,1)", "rgba(255,160,80,0.35)");
+  const soft = glowTexture("rgba(255,255,255,1)", "rgba(255,255,255,0.3)");
+  // Frees everything the scene holds, whether unmounted mid-build or after running.
+  const disposeAll = () => {
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    const textures = new Set<THREE.Texture>([glow, soft]);
+    scene.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (object instanceof THREE.InstancedMesh) object.dispose();
+      if (mesh.geometry) geometries.add(mesh.geometry);
+      if (!mesh.material) return;
+      (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((material) => {
+        materials.add(material);
+        const map = (material as THREE.MeshBasicMaterial).map;
+        if (map) textures.add(map);
+      });
+    });
+    geometries.forEach((geometry) => geometry.dispose());
+    materials.forEach((material) => material.dispose());
+    textures.forEach((texture) => texture.dispose());
+    renderer.dispose();
+  };
+  const { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon, detailStats } = await buildWorld(glow, soft);
+  scene.add(world);
+  if (unmounted()) {
+    disposeAll();
+    return;
+  }
+
+  const fineBatches: THREE.InstancedMesh[] = [];
+  world.traverse((object) => { if (object instanceof THREE.InstancedMesh && object.userData.detailDistance) fineBatches.push(object); });
+  const detailCenter = new THREE.Vector3();
+  const updateDetailVisibility = () => {
+    fineBatches.forEach((mesh) => {
+      detailCenter.copy(mesh.boundingSphere!.center).add(world.position);
+      const reach = mesh.userData.detailDistance + mesh.boundingSphere!.radius;
+      mesh.visible = detailCenter.distanceToSquared(camera.position) < reach * reach;
+    });
+  };
+  const sky = document.querySelector<HTMLElement>(".w-sky");
+
+  /* stop-aware spline: sections map to stop control points, with shaping
+     mids between them, so every section lands exactly on its composition */
+  const positionCurve = new THREE.CatmullRomCurve3(FLIGHT.map(({ p }) => new THREE.Vector3(...p)), false, "centripetal", 0.6);
+  const targetCurve = new THREE.CatmullRomCurve3(FLIGHT.map(({ t }) => new THREE.Vector3(...t)), false, "centripetal", 0.6);
+  const stopU = FLIGHT.map((point, index) => (point.stop ? index / (FLIGHT.length - 1) : null)).filter((u): u is number => u !== null);
+  /* Each section holds the camera at its stop for DWELL of the scroll on
+     both sides, and the transit in between is smoothstepped — so shots
+     linger while cards are read, then glide. */
+  const DWELL = 0.22;
+  const progressToU = (progress: number) => {
+    const scaled = Math.min(0.9999, Math.max(0, progress)) * (stopU.length - 1);
+    const section = Math.floor(scaled);
+    let f = (scaled - section - DWELL) / (1 - 2 * DWELL);
+    f = Math.min(1, Math.max(0, f));
+    f = f * f * f * (f * (f * 6 - 15) + 10);
+    return stopU[section] + (stopU[section + 1] - stopU[section]) * f;
+  };
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const desiredPosition = new THREE.Vector3(...FLIGHT[0].p);
+  const desiredTarget = new THREE.Vector3(...FLIGHT[0].t);
+  const currentTarget = desiredTarget.clone();
+  camera.position.copy(desiredPosition);
+  camera.lookAt(currentTarget);
+
+  const petalPositions = petals.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const petalSpeeds = Float32Array.from({ length: petalPositions.count }, (_, index) => 0.28 + ((index * 31) % 17) / 17 * 0.5);
+
+  const streakStates: StreakState[] = streaks.map((_, index) => ({
+    active: false, life: 0, nextAt: 3 + index * 5, velocity: new THREE.Vector3(),
+  }));
+
+  // The build yields, so the context may already be gone; restore is handled below.
+  let contextLost = renderer.getContext().isContextLost();
+  if (contextLost) canvas.classList.add("is-fallback");
+  // No callback may start the loop until shaders have compiled off the first frame.
+  let ready = false;
+  let frame = 0;
+  let lastTime = 0;
+  let devProgress: number | null = null;
+  let frozenTime: number | null = null;
+  let elapsed = 0;
+
+  /* Anchor each shot while its card is visible. The long finale anchors near
+     its heading, not halfway down the campaign graphics and FAQ. */
+  let sectionCenters: number[] = [];
+  const measureSections = () => {
+    const sections = Array.from(document.querySelectorAll<HTMLElement>("[data-stop]"));
+    if (sections.length < 2) return;
+    const viewport = window.innerHeight;
+    sectionCenters = sections.map((section, index) => index === 0 ? 0 :
+      section.offsetTop + (index === sections.length - 1 ? -viewport * 0.12 : Math.min(viewport * 0.25, (section.offsetHeight - viewport) / 2)));
+  };
+  const scrollToU = () => {
+    if (sectionCenters.length < 2) return 0;
+    const y = window.scrollY;
+    let segment = 0;
+    while (segment < sectionCenters.length - 2 && y > sectionCenters[segment + 1]) segment += 1;
+    let f = (y - sectionCenters[segment]) / Math.max(1, sectionCenters[segment + 1] - sectionCenters[segment]);
+    f = (Math.min(1, Math.max(0, f)) - DWELL) / (1 - 2 * DWELL);
+    f = Math.min(1, Math.max(0, f));
+    f = f * f * f * (f * (f * 6 - 15) + 10);
+    return stopU[segment] + (stopU[segment + 1] - stopU[segment]) * f;
+  };
+
+  const mobileTargets: Vec3[] = [[0, 0.5, 0], [-1.5, 1.5, -2.9], [17, 0, -17], [-14, 4.5, -14], [-25, 11, 1], [-1.8, 1.5, -2.9], [-9, 26, -54], [0, 0.5, 0]];
+  const mobileTargetCurve = new THREE.CatmullRomCurve3(FLIGHT.map((point, index) => {
+    const stopIndex = stopU.indexOf(index / (FLIGHT.length - 1));
+    return new THREE.Vector3(...(stopIndex >= 0 ? mobileTargets[stopIndex] : point.t));
+  }), false, "centripetal");
+  const mobilePositionCurve = new THREE.CatmullRomCurve3(FLIGHT.map((point, index) => {
+    const stopIndex = stopU.indexOf(index / (FLIGHT.length - 1));
+    if (stopIndex === 1) return new THREE.Vector3(-5, 6, 8);
+    if (stopIndex === 5) return new THREE.Vector3(-5.2, 5.6, 7);
+    const target = new THREE.Vector3(...(stopIndex >= 0 ? mobileTargets[stopIndex] : point.t));
+    const position = new THREE.Vector3(...point.p);
+    return position.addScaledVector(position.clone().sub(target), 0.65);
+  }), false, "centripetal");
+  const frameCamera = (u: number) => {
+    positionCurve.getPoint(u, desiredPosition);
+    (camera.aspect < 0.85 ? mobileTargetCurve : targetCurve).getPoint(u, desiredTarget);
+    if (camera.aspect < 0.85) {
+      // Pull back to retain the whole island, then reserve the lower view for cards.
+      mobilePositionCurve.getPoint(u, desiredPosition);
+      const drop = desiredPosition.distanceTo(desiredTarget) * 0.32;
+      desiredTarget.y -= drop;
+    }
+  };
+  const resize = () => {
+    const { clientWidth: width, clientHeight: height } = canvas;
+    if (!width || !height) return;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(2_500_000 / (width * height))));
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
+    camera.fov = width / height < 0.85 ? 64 : 52;
+    camera.updateProjectionMatrix();
+    if (ready && !frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
+  };
+
+  const updateStreaks = (time: number, delta: number) => {
+    streakStates.forEach((state, index) => {
+      const streak = streaks[index];
+      if (!state.active) {
+        if (time >= state.nextAt) {
+          state.active = true;
+          state.life = 0;
+          streak.position.set((Math.random() - 0.5) * 110, 26 + Math.random() * 18, -64);
+          state.velocity.set(-(12 + Math.random() * 10), -(4 + Math.random() * 3), 0);
+          streak.material.rotation = Math.atan2(state.velocity.y, state.velocity.x);
+        }
+        return;
+      }
+      state.life += delta / 1.2;
+      streak.position.addScaledVector(state.velocity, delta);
+      streak.material.opacity = Math.sin(Math.min(1, state.life) * Math.PI) * 0.85;
+      if (state.life >= 1) {
+        state.active = false;
+        streak.material.opacity = 0;
+        state.nextAt = time + 5 + Math.random() * 8;
+      }
+    });
+  };
+
+  // Three scalar uniform updates replace per-star CPU work and colour uploads.
+  const twinkleLayers = [stars, starsFine, starsBright];
+  const updateTwinkle = (time: number) => {
+    twinkleLayers.forEach((layer) => {
+      const uniform = layer.material.userData.twinkleTime as { value: number } | undefined;
+      if (uniform) uniform.value = time;
+    });
+  };
+
+  const orbitAxis = new THREE.Vector3();
+  const placeOrbitCard = (card: THREE.Mesh, time: number) => {
+    const { radius, tiltX, tiltZ, angle, speed } = card.userData as { radius: number; tiltX: number; tiltZ: number; angle: number; speed: number };
+    const theta = angle + time * speed;
+    orbitAxis.set(Math.cos(theta) * radius, 0, Math.sin(theta) * radius);
+    orbitAxis.applyEuler(new THREE.Euler(tiltX, 0, tiltZ));
+    card.position.copy(orbitAxis);
+    card.lookAt(0, 0, 0);
+  };
+
+  const render = (timestamp: number) => {
+    if (contextLost) { frame = 0; return; }
+    frame = reducedMotion.matches ? 0 : window.requestAnimationFrame(render);
+    const seconds = timestamp * 0.001;
+    const delta = Math.min(0.05, lastTime ? seconds - lastTime : 0.016);
+    lastTime = seconds;
+    if (!reducedMotion.matches && frozenTime === null) elapsed += delta;
+    const time = reducedMotion.matches ? 0 : frozenTime ?? elapsed;
+
+    if (!reducedMotion.matches) {
+      const u = devProgress === null ? scrollToU() : progressToU(devProgress);
+      frameCamera(u);
+
+      lanterns.update(time);
+
+      world.position.y = Math.sin(time * 0.4) * 0.12;
+      fireflies.rotation.y = time * 0.02;
+      (fireflies.material as THREE.PointsMaterial).opacity = 0.62 + Math.sin(time * 1.3) * 0.22;
+      updateTwinkle(time);
+      (constellationStars.material as THREE.PointsMaterial).opacity = 0.72 + Math.sin(time * 1.4) * 0.26;
+      pebbles.rotation.y = time * 0.012;
+      moon.rotation.y = time * 0.018;
+
+      orbitCards.forEach((card) => placeOrbitCard(card, time));
+
+      for (let index = 0; frozenTime === null && index < petalPositions.count; index += 1) {
+        let y = petalPositions.getY(index) - petalSpeeds[index] * delta;
+        if (y < -3) y += 15;
+        petalPositions.setY(index, y);
+        petalPositions.setX(index, petalPositions.getX(index) + Math.sin(time * 0.8 + index) * delta * 0.24);
+      }
+      petalPositions.needsUpdate = true;
+
+      if (frozenTime === null) updateStreaks(time, delta);
+
+      if (sky) {
+        const altitude = Math.min(34, Math.max(0, (camera.position.y - 2.4) * 4));
+        sky.style.transform = `translate3d(0, ${altitude.toFixed(2)}vh, 0)`;
+      }
+    }
+
+    if (reducedMotion.matches) {
+      frameCamera(0);
+      camera.position.copy(desiredPosition);
+      currentTarget.copy(desiredTarget);
+      world.position.y = 0;
+      if (sky) sky.style.transform = "none";
+    } else {
+      const damping = 1 - Math.exp(-5 * delta);
+      camera.position.lerp(desiredPosition, damping);
+      currentTarget.lerp(desiredTarget, damping);
+    }
+    // A level horizon and time-based damping avoid scroll-induced rolling.
+    camera.lookAt(currentTarget);
+
+    updateDetailVisibility();
+    renderer.render(scene, camera);
+    canvas.classList.add("is-on");
+  };
+
+  /* dev-only hook: lets tooling park the camera at an exact progress and
+     force a frame, so compositions can be verified from rendered stills */
+  const devHook = {
+    setProgress: (progress: number) => {
+      devProgress = progress;
+      frameCamera(reducedMotion.matches ? 0 : progressToU(progress));
+      camera.position.copy(desiredPosition);
+      currentTarget.copy(desiredTarget);
+      camera.lookAt(currentTarget);
+    },
+    snap: (time = 0) => {
+      frozenTime = time;
+      if (!reducedMotion.matches) {
+        updateTwinkle(time);
+        orbitCards.forEach((card) => placeOrbitCard(card, time));
+      }
+      if (!contextLost) { updateDetailVisibility(); renderer.render(scene, camera); }
+      return canvas;
+    },
+    setSize: (width: number, height: number) => {
+      renderer.setPixelRatio(1);
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.fov = width / height < 0.85 ? 64 : 52;
+      camera.updateProjectionMatrix();
+    },
+    resume: () => { devProgress = null; frozenTime = null; },
+    inspect: () => ({
+      position: camera.position.toArray(), target: currentTarget.toArray(),
+      calls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
+      geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
+      pixelRatio: renderer.getPixelRatio(), reducedMotion: reducedMotion.matches,
+      progress: devProgress, sectionAnchors: [...sectionCenters], contextLost, ...detailStats,
+    }),
+    look: (px: number, py: number, pz: number, tx: number, ty: number, tz: number) => {
+      desiredPosition.set(px, py, pz);
+      desiredTarget.set(tx, ty, tz);
+      camera.position.copy(desiredPosition);
+      currentTarget.copy(desiredTarget);
+      camera.lookAt(currentTarget);
+    },
+  };
+  if (process.env.NODE_ENV !== "production") (window as unknown as { __nightflight?: typeof devHook }).__nightflight = devHook;
+
+  const onVisibilityChange = () => {
+    if (document.hidden) {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    } else if (ready && !frame && !contextLost) {
+      lastTime = 0;
+      frame = window.requestAnimationFrame(render);
+    }
+  };
+
+  // Preserve Claude's driver-crash fallback and context recovery from 8df52c4.
+  const onContextLost = (event: Event) => {
+    event.preventDefault();
+    contextLost = true;
+    if (frame) { window.cancelAnimationFrame(frame); frame = 0; }
+    canvas.classList.remove("is-on");
+    canvas.classList.add("is-fallback");
+  };
+  const onContextRestored = () => {
+    contextLost = false;
+    canvas.classList.remove("is-fallback");
+    lastTime = 0;
+    if (ready && !frame && !document.hidden) frame = window.requestAnimationFrame(render);
+  };
+  canvas.addEventListener("webglcontextlost", onContextLost);
+  canvas.addEventListener("webglcontextrestored", onContextRestored);
+
+  const onMotionChange = () => {
+    lastTime = 0;
+    if (ready && !frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
+  };
+  reducedMotion.addEventListener("change", onMotionChange);
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(canvas);
+  const layoutObserver = new ResizeObserver(measureSections);
+  layoutObserver.observe(document.body);
+  resize();
+  measureSections();
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  orbitCards.forEach((card) => placeOrbitCard(card, 0));
+  /* Compile every program before the first frame. With KHR_parallel_shader_compile
+     the driver works off the main thread; a context lost meanwhile reports its
+     programs complete, and the loss/restore handlers decide whether to draw. */
+  let disposed = false;
+  const compiled = renderer.compileAsync(scene, camera).catch(() => undefined).then(() => {
+    if (disposed) return;
+    ready = true;
+    if (!frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
+  });
+
+  return () => {
+    disposed = true;
+    canvas.removeEventListener("webglcontextlost", onContextLost);
+    canvas.removeEventListener("webglcontextrestored", onContextRestored);
+    reducedMotion.removeEventListener("change", onMotionChange);
+    resizeObserver.disconnect();
+    layoutObserver.disconnect();
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    delete (window as unknown as { __nightflight?: unknown }).__nightflight;
+    if (frame) window.cancelAnimationFrame(frame);
+    if (sky) sky.style.transform = "";
+    // compileAsync polls each material's program, so free GPU objects only once it settles.
+    void compiled.then(disposeAll);
+  };
+}
+
+/* allowSoftwareRenderer is only ever true for the dev-only ?world=force override. */
+export function WorldScene({ allowSoftwareRenderer = false }: { allowSoftwareRenderer?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
-    let renderer: THREE.WebGLRenderer;
-    try {
-      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "default" });
-    } catch {
-      canvas.classList.add("is-fallback", "is-on");
-      return;
-    }
-
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x555378, 0.007);
-    const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 300);
-
-    const hemisphere = new THREE.HemisphereLight(0xb9c8f5, 0x605977, 1.65);
-    const warm = new THREE.DirectionalLight(0xffd1a3, 2.0);
-    warm.position.set(-14, 6, 10);
-    const cool = new THREE.DirectionalLight(0x9dbdff, 1.1);
-    cool.position.set(10, 14, -8);
-    scene.add(hemisphere, warm, cool);
-
-    const glow = glowTexture("rgba(255,220,170,1)", "rgba(255,160,80,0.35)");
-    const soft = glowTexture("rgba(255,255,255,1)", "rgba(255,255,255,0.3)");
-    const { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon, detailStats } = buildWorld(glow, soft);
-    scene.add(world);
-
-    const fineBatches: THREE.InstancedMesh[] = [];
-    world.traverse((object) => { if (object instanceof THREE.InstancedMesh && object.userData.detailDistance) fineBatches.push(object); });
-    const detailCenter = new THREE.Vector3();
-    const updateDetailVisibility = () => {
-      fineBatches.forEach((mesh) => {
-        detailCenter.copy(mesh.boundingSphere!.center).add(world.position);
-        const reach = mesh.userData.detailDistance + mesh.boundingSphere!.radius;
-        mesh.visible = detailCenter.distanceToSquared(camera.position) < reach * reach;
-      });
-    };
-    const sky = document.querySelector<HTMLElement>(".w-sky");
-
-    /* stop-aware spline: sections map to stop control points, with shaping
-       mids between them, so every section lands exactly on its composition */
-    const positionCurve = new THREE.CatmullRomCurve3(FLIGHT.map(({ p }) => new THREE.Vector3(...p)), false, "centripetal", 0.6);
-    const targetCurve = new THREE.CatmullRomCurve3(FLIGHT.map(({ t }) => new THREE.Vector3(...t)), false, "centripetal", 0.6);
-    const stopU = FLIGHT.map((point, index) => (point.stop ? index / (FLIGHT.length - 1) : null)).filter((u): u is number => u !== null);
-    /* Each section holds the camera at its stop for DWELL of the scroll on
-       both sides, and the transit in between is smoothstepped — so shots
-       linger while cards are read, then glide. */
-    const DWELL = 0.22;
-    const progressToU = (progress: number) => {
-      const scaled = Math.min(0.9999, Math.max(0, progress)) * (stopU.length - 1);
-      const section = Math.floor(scaled);
-      let f = (scaled - section - DWELL) / (1 - 2 * DWELL);
-      f = Math.min(1, Math.max(0, f));
-      f = f * f * f * (f * (f * 6 - 15) + 10);
-      return stopU[section] + (stopU[section + 1] - stopU[section]) * f;
-    };
-
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const desiredPosition = new THREE.Vector3(...FLIGHT[0].p);
-    const desiredTarget = new THREE.Vector3(...FLIGHT[0].t);
-    const currentTarget = desiredTarget.clone();
-    camera.position.copy(desiredPosition);
-    camera.lookAt(currentTarget);
-
-    const petalPositions = petals.geometry.getAttribute("position") as THREE.BufferAttribute;
-    const petalSpeeds = Float32Array.from({ length: petalPositions.count }, (_, index) => 0.28 + ((index * 31) % 17) / 17 * 0.5);
-
-    const streakStates: StreakState[] = streaks.map((_, index) => ({
-      active: false, life: 0, nextAt: 3 + index * 5, velocity: new THREE.Vector3(),
-    }));
-
-    let contextLost = false;
-    let frame = 0;
-    let lastTime = 0;
-    let devProgress: number | null = null;
-    let frozenTime: number | null = null;
-    let elapsed = 0;
-
-    /* Anchor each shot while its card is visible. The long finale anchors near
-       its heading, not halfway down the campaign graphics and FAQ. */
-    let sectionCenters: number[] = [];
-    const measureSections = () => {
-      const sections = Array.from(document.querySelectorAll<HTMLElement>("[data-stop]"));
-      if (sections.length < 2) return;
-      const viewport = window.innerHeight;
-      sectionCenters = sections.map((section, index) => index === 0 ? 0 :
-        section.offsetTop + (index === sections.length - 1 ? -viewport * 0.12 : Math.min(viewport * 0.25, (section.offsetHeight - viewport) / 2)));
-    };
-    const scrollToU = () => {
-      if (sectionCenters.length < 2) return 0;
-      const y = window.scrollY;
-      let segment = 0;
-      while (segment < sectionCenters.length - 2 && y > sectionCenters[segment + 1]) segment += 1;
-      let f = (y - sectionCenters[segment]) / Math.max(1, sectionCenters[segment + 1] - sectionCenters[segment]);
-      f = (Math.min(1, Math.max(0, f)) - DWELL) / (1 - 2 * DWELL);
-      f = Math.min(1, Math.max(0, f));
-      f = f * f * f * (f * (f * 6 - 15) + 10);
-      return stopU[segment] + (stopU[segment + 1] - stopU[segment]) * f;
-    };
-
-    const mobileTargets: Vec3[] = [[0, 0.5, 0], [-1.5, 1.5, -2.9], [17, 0, -17], [-14, 4.5, -14], [-25, 11, 1], [-1.8, 1.5, -2.9], [-9, 26, -54], [0, 0.5, 0]];
-    const mobileTargetCurve = new THREE.CatmullRomCurve3(FLIGHT.map((point, index) => {
-      const stopIndex = stopU.indexOf(index / (FLIGHT.length - 1));
-      return new THREE.Vector3(...(stopIndex >= 0 ? mobileTargets[stopIndex] : point.t));
-    }), false, "centripetal");
-    const mobilePositionCurve = new THREE.CatmullRomCurve3(FLIGHT.map((point, index) => {
-      const stopIndex = stopU.indexOf(index / (FLIGHT.length - 1));
-      if (stopIndex === 1) return new THREE.Vector3(-5, 6, 8);
-      if (stopIndex === 5) return new THREE.Vector3(-5.2, 5.6, 7);
-      const target = new THREE.Vector3(...(stopIndex >= 0 ? mobileTargets[stopIndex] : point.t));
-      const position = new THREE.Vector3(...point.p);
-      return position.addScaledVector(position.clone().sub(target), 0.65);
-    }), false, "centripetal");
-    const frameCamera = (u: number) => {
-      positionCurve.getPoint(u, desiredPosition);
-      (camera.aspect < 0.85 ? mobileTargetCurve : targetCurve).getPoint(u, desiredTarget);
-      if (camera.aspect < 0.85) {
-        // Pull back to retain the whole island, then reserve the lower view for cards.
-        mobilePositionCurve.getPoint(u, desiredPosition);
-        const drop = desiredPosition.distanceTo(desiredTarget) * 0.32;
-        desiredTarget.y -= drop;
-      }
-    };
-    const resize = () => {
-      const { clientWidth: width, clientHeight: height } = canvas;
-      if (!width || !height) return;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(2_500_000 / (width * height))));
-      renderer.setSize(width, height, false);
-      camera.aspect = width / height;
-      camera.fov = width / height < 0.85 ? 64 : 52;
-      camera.updateProjectionMatrix();
-      if (!frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
-    };
-
-    const updateStreaks = (time: number, delta: number) => {
-      streakStates.forEach((state, index) => {
-        const streak = streaks[index];
-        if (!state.active) {
-          if (time >= state.nextAt) {
-            state.active = true;
-            state.life = 0;
-            streak.position.set((Math.random() - 0.5) * 110, 26 + Math.random() * 18, -64);
-            state.velocity.set(-(12 + Math.random() * 10), -(4 + Math.random() * 3), 0);
-            streak.material.rotation = Math.atan2(state.velocity.y, state.velocity.x);
-          }
-          return;
-        }
-        state.life += delta / 1.2;
-        streak.position.addScaledVector(state.velocity, delta);
-        streak.material.opacity = Math.sin(Math.min(1, state.life) * Math.PI) * 0.85;
-        if (state.life >= 1) {
-          state.active = false;
-          streak.material.opacity = 0;
-          state.nextAt = time + 5 + Math.random() * 8;
-        }
-      });
-    };
-
-    // Three scalar uniform updates replace per-star CPU work and colour uploads.
-    const twinkleLayers = [stars, starsFine, starsBright];
-    const updateTwinkle = (time: number) => {
-      twinkleLayers.forEach((layer) => {
-        const uniform = layer.material.userData.twinkleTime as { value: number } | undefined;
-        if (uniform) uniform.value = time;
-      });
-    };
-
-    const orbitAxis = new THREE.Vector3();
-    const placeOrbitCard = (card: THREE.Mesh, time: number) => {
-      const { radius, tiltX, tiltZ, angle, speed } = card.userData as { radius: number; tiltX: number; tiltZ: number; angle: number; speed: number };
-      const theta = angle + time * speed;
-      orbitAxis.set(Math.cos(theta) * radius, 0, Math.sin(theta) * radius);
-      orbitAxis.applyEuler(new THREE.Euler(tiltX, 0, tiltZ));
-      card.position.copy(orbitAxis);
-      card.lookAt(0, 0, 0);
-    };
-
-    const render = (timestamp: number) => {
-      if (contextLost) { frame = 0; return; }
-      frame = reducedMotion.matches ? 0 : window.requestAnimationFrame(render);
-      const seconds = timestamp * 0.001;
-      const delta = Math.min(0.05, lastTime ? seconds - lastTime : 0.016);
-      lastTime = seconds;
-      if (!reducedMotion.matches && frozenTime === null) elapsed += delta;
-      const time = reducedMotion.matches ? 0 : frozenTime ?? elapsed;
-
-      if (!reducedMotion.matches) {
-        const u = devProgress === null ? scrollToU() : progressToU(devProgress);
-        frameCamera(u);
-
-        lanterns.update(time);
-
-        world.position.y = Math.sin(time * 0.4) * 0.12;
-        fireflies.rotation.y = time * 0.02;
-        (fireflies.material as THREE.PointsMaterial).opacity = 0.62 + Math.sin(time * 1.3) * 0.22;
-        updateTwinkle(time);
-        (constellationStars.material as THREE.PointsMaterial).opacity = 0.72 + Math.sin(time * 1.4) * 0.26;
-        pebbles.rotation.y = time * 0.012;
-        moon.rotation.y = time * 0.018;
-
-        orbitCards.forEach((card) => placeOrbitCard(card, time));
-
-        for (let index = 0; frozenTime === null && index < petalPositions.count; index += 1) {
-          let y = petalPositions.getY(index) - petalSpeeds[index] * delta;
-          if (y < -3) y += 15;
-          petalPositions.setY(index, y);
-          petalPositions.setX(index, petalPositions.getX(index) + Math.sin(time * 0.8 + index) * delta * 0.24);
-        }
-        petalPositions.needsUpdate = true;
-
-        if (frozenTime === null) updateStreaks(time, delta);
-
-        if (sky) {
-          const altitude = Math.min(34, Math.max(0, (camera.position.y - 2.4) * 4));
-          sky.style.transform = `translate3d(0, ${altitude.toFixed(2)}vh, 0)`;
-        }
-      }
-
-      if (reducedMotion.matches) {
-        frameCamera(0);
-        camera.position.copy(desiredPosition);
-        currentTarget.copy(desiredTarget);
-        world.position.y = 0;
-        if (sky) sky.style.transform = "none";
-      } else {
-        const damping = 1 - Math.exp(-5 * delta);
-        camera.position.lerp(desiredPosition, damping);
-        currentTarget.lerp(desiredTarget, damping);
-      }
-      // A level horizon and time-based damping avoid scroll-induced rolling.
-      camera.lookAt(currentTarget);
-
-      updateDetailVisibility();
-      renderer.render(scene, camera);
-      canvas.classList.add("is-on");
-    };
-
-    /* dev-only hook: lets tooling park the camera at an exact progress and
-       force a frame, so compositions can be verified from rendered stills */
-    const devHook = {
-      setProgress: (progress: number) => {
-        devProgress = progress;
-        frameCamera(reducedMotion.matches ? 0 : progressToU(progress));
-        camera.position.copy(desiredPosition);
-        currentTarget.copy(desiredTarget);
-        camera.lookAt(currentTarget);
-      },
-      snap: (time = 0) => {
-        frozenTime = time;
-        if (!reducedMotion.matches) {
-          updateTwinkle(time);
-          orbitCards.forEach((card) => placeOrbitCard(card, time));
-        }
-        if (!contextLost) { updateDetailVisibility(); renderer.render(scene, camera); }
-        return canvas;
-      },
-      setSize: (width: number, height: number) => {
-        renderer.setPixelRatio(1);
-        renderer.setSize(width, height, false);
-        camera.aspect = width / height;
-        camera.fov = width / height < 0.85 ? 64 : 52;
-        camera.updateProjectionMatrix();
-      },
-      resume: () => { devProgress = null; frozenTime = null; },
-      inspect: () => ({
-        position: camera.position.toArray(), target: currentTarget.toArray(),
-        calls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
-        geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
-        pixelRatio: renderer.getPixelRatio(), reducedMotion: reducedMotion.matches,
-        progress: devProgress, sectionAnchors: [...sectionCenters], contextLost, ...detailStats,
-      }),
-      look: (px: number, py: number, pz: number, tx: number, ty: number, tz: number) => {
-        desiredPosition.set(px, py, pz);
-        desiredTarget.set(tx, ty, tz);
-        camera.position.copy(desiredPosition);
-        currentTarget.copy(desiredTarget);
-        camera.lookAt(currentTarget);
-      },
-    };
-    if (process.env.NODE_ENV !== "production") (window as unknown as { __nightflight?: typeof devHook }).__nightflight = devHook;
-
-    const onVisibilityChange = () => {
-      if (document.hidden) {
-        if (frame) {
-          window.cancelAnimationFrame(frame);
-          frame = 0;
-        }
-      } else if (!frame && !contextLost) {
-        lastTime = 0;
-        frame = window.requestAnimationFrame(render);
-      }
-    };
-
-    // Preserve Claude's driver-crash fallback and context recovery from 8df52c4.
-    const onContextLost = (event: Event) => {
-      event.preventDefault();
-      contextLost = true;
-      if (frame) { window.cancelAnimationFrame(frame); frame = 0; }
-      canvas.classList.remove("is-on");
-      canvas.classList.add("is-fallback");
-    };
-    const onContextRestored = () => {
-      contextLost = false;
-      canvas.classList.remove("is-fallback");
-      lastTime = 0;
-      if (!frame && !document.hidden) frame = window.requestAnimationFrame(render);
-    };
-    canvas.addEventListener("webglcontextlost", onContextLost);
-    canvas.addEventListener("webglcontextrestored", onContextRestored);
-
-    const onMotionChange = () => {
-      lastTime = 0;
-      if (!frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
-    };
-    reducedMotion.addEventListener("change", onMotionChange);
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(canvas);
-    const layoutObserver = new ResizeObserver(measureSections);
-    layoutObserver.observe(document.body);
-    resize();
-    measureSections();
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    orbitCards.forEach((card) => placeOrbitCard(card, 0));
-    if (!frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
-
+    let unmounted = false;
+    let stop: (() => void) | undefined;
+    void startWorld(canvas, allowSoftwareRenderer, () => unmounted).then((cleanup) => {
+      if (unmounted) cleanup?.();
+      else stop = cleanup;
+    });
     return () => {
-      canvas.removeEventListener("webglcontextlost", onContextLost);
-      canvas.removeEventListener("webglcontextrestored", onContextRestored);
-      reducedMotion.removeEventListener("change", onMotionChange);
-      resizeObserver.disconnect();
-      layoutObserver.disconnect();
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      delete (window as unknown as { __nightflight?: unknown }).__nightflight;
-      if (frame) window.cancelAnimationFrame(frame);
-      const geometries = new Set<THREE.BufferGeometry>();
-      const materials = new Set<THREE.Material>();
-      const textures = new Set<THREE.Texture>([glow, soft]);
-      scene.traverse((object) => {
-        const mesh = object as THREE.Mesh;
-        if (object instanceof THREE.InstancedMesh) object.dispose();
-        if (mesh.geometry) geometries.add(mesh.geometry);
-        if (!mesh.material) return;
-        (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((material) => {
-          materials.add(material);
-          const map = (material as THREE.MeshBasicMaterial).map;
-          if (map) textures.add(map);
-        });
-      });
-      geometries.forEach((geometry) => geometry.dispose());
-      materials.forEach((material) => material.dispose());
-      textures.forEach((texture) => texture.dispose());
-      if (sky) sky.style.transform = "";
-      renderer.dispose();
+      unmounted = true;
+      stop?.();
     };
-  }, []);
+  }, [allowSoftwareRenderer]);
 
   return <canvas ref={canvasRef} className="w-canvas" aria-hidden="true" />;
 }

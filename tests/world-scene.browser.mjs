@@ -12,7 +12,12 @@ const origin = process.env.WORLD_URL || "http://localhost:3000";
 const directory = process.env.WORLD_OUTPUT_DIRECTORY || "outputs/world-review";
 const results = [];
 const errors = [];
-const hideCopy = ".w main,.w-nav,.w-rail { visibility:hidden !important; } .w-canvas { transition:none !important; }";
+const hideCopy = ".w main,.w-nav,.w-rail { visibility:hidden !important; } .w-canvas,.w-still { transition:none !important; }";
+// Headless Edge usually renders WebGL with SwiftShader, which the page refuses
+// without the dev-only override, so live-scene passes load with ?world=force.
+const forced = `${origin}/?world=force`;
+// Requests that would mean the scene chunk or three.js was fetched (dev and build URLs).
+const sceneChunk = /WorldScene|\/three[./@-]|deps\/three/;
 await fs.mkdir(directory, { recursive: true });
 
 async function open(options) {
@@ -21,16 +26,69 @@ async function open(options) {
   page.on("console", (message) => {
     if (message.type() === "error" && /THREE.WebGLProgram|Shader Error|VALIDATE_STATUS/.test(message.text())) errors.push(message.text());
   });
-  await page.goto(origin, { waitUntil: "networkidle" });
+  await page.goto(forced, { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.__nightflight);
+  await page.waitForSelector(".w-canvas.is-on:not(.is-fallback)");
   await page.addStyleTag({ content: "html { scroll-behavior:auto !important; }" });
   return page;
 }
 
 try {
+  // Report what headless Edge actually renders with; the page itself never sees this.
+  const probe = await browser.newPage();
+  await probe.goto(`${origin}/world-fallback.jpg`);
+  const nativeRenderer = await probe.evaluate(() => {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    if (!gl) return "no webgl2";
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    return String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+  });
+  console.log(`Headless renderer: ${nativeRenderer}`);
+  await probe.close();
+  if (!/swiftshader|llvmpipe|softpipe|microsoft basic render|software/i.test(nativeRenderer)) {
+    // Hardware WebGL: the scene must boot on its own, after load, with no override.
+    const hardware = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    hardware.on("pageerror", (error) => errors.push(error.message));
+    await hardware.goto(origin, { waitUntil: "load" });
+    await hardware.waitForSelector(".w-canvas.is-on:not(.is-fallback)");
+    await hardware.close();
+  }
+
+  // Without the override, a software renderer must never load three.js: the
+  // server-rendered still stays visible and no canvas mounts.
+  const software = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  software.on("pageerror", (error) => errors.push(error.message));
+  const sceneRequests = [];
+  software.on("request", (request) => { if (sceneChunk.test(request.url())) sceneRequests.push(request.url()); });
+  await software.addInitScript(() => {
+    for (const context of [WebGLRenderingContext, WebGL2RenderingContext]) {
+      const original = context.prototype.getParameter;
+      context.prototype.getParameter = function (name) {
+        // RENDERER and UNMASKED_RENDERER_WEBGL
+        if (name === 0x1f01 || name === 0x9246) return "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)";
+        return original.call(this, name);
+      };
+    }
+  });
+  await software.goto(origin, { waitUntil: "networkidle" });
+  await software.waitForTimeout(3500);
+  assert.equal(await software.locator(".w-canvas").count(), 0, "a software renderer must not mount the scene");
+  assert.deepEqual(sceneRequests, [], "a software renderer must not fetch three.js or the scene chunk");
+  assert.equal(await software.evaluate(() => window.__nightflight), undefined);
+  const softwareStill = await software.locator(".w-still").evaluate((image) => ({
+    src: image.currentSrc, loaded: image.complete && image.naturalWidth > 0, opacity: getComputedStyle(image).opacity,
+  }));
+  assert.match(softwareStill.src, /world-fallback\.jpg$/);
+  assert.ok(softwareStill.loaded, "the still must load");
+  assert.equal(softwareStill.opacity, "1", "the still stays visible without a live scene");
+  await software.screenshot({ path: `${directory}/software-still.png` });
+  await software.close();
+
   for (const [name, width, height] of [["desktop", 1280, 800], ["phone", 390, 844]]) {
     const page = await open({ viewport: { width, height } });
     assert.equal(await page.locator("[data-stop]").count(), 8);
+    // The live canvas is alpha over the sky, so the still must actually fade out.
+    await page.waitForFunction(() => getComputedStyle(document.querySelector(".w-still")).opacity === "0");
     for (let stop = 0; stop < 8; stop++) {
       await page.evaluate((index) => {
         window.__nightflight.resume();
@@ -125,14 +183,16 @@ try {
       return original.call(this, type, ...args);
     };
   });
-  await fallback.goto(origin, { waitUntil: "networkidle" });
+  // Forced past the probe so WorldScene's own renderer-failure path is exercised.
+  await fallback.goto(forced, { waitUntil: "networkidle" });
   await fallback.waitForSelector(".w-canvas.is-fallback.is-on");
   assert.match(await fallback.locator(".w-canvas").evaluate((element) => getComputedStyle(element).backgroundImage), /world-fallback.jpg/);
+  assert.equal(await fallback.locator(".w-still").evaluate((image) => getComputedStyle(image).opacity), "1");
   assert.equal((await fallback.request.get(`${origin}/world-fallback.jpg`)).status(), 200);
   await fallback.screenshot({ path: `${directory}/fallback-check.png` });
   assert.deepEqual(errors, [], "no application errors during browser checks");
   await fs.writeFile(`${directory}/stats.json`, JSON.stringify(results, null, 2));
-  console.log("PASS: 16 waypoint captures, scroll alignment, DPR cap, reduced motion, resume, WebGL fallback/context recovery, and framebuffer budget.");
+  console.log("PASS: software-renderer still, 16 waypoint captures, scroll alignment, DPR cap, reduced motion, resume, WebGL fallback/context recovery, and framebuffer budget.");
 } finally {
   await browser.close();
 }
