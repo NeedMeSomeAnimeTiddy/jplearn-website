@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render(path = "/") {
@@ -36,12 +37,55 @@ test("server-renders the complete Night Flight landing page", async () => {
 test("paints the world still before any three.js code loads", async () => {
   const html = await (await render("/")).text();
   const still = html.match(/<img[^>]*class="w-still"[^>]*>/)?.[0] ?? "";
-  assert.match(still, /src="\/world-fallback\.jpg"/);
+  const srcset = "/world-fallback-960.webp 960w, /world-fallback.webp 1920w";
+  assert.match(still, /src="\/world-fallback\.webp"/);
+  assert.ok(still.toLowerCase().includes(`srcset="${srcset}"`), "phones get the 960 WebP");
+  assert.match(still, /sizes="100vw"/);
   assert.match(still, /alt=""/);
   assert.match(still, /aria-hidden="true"/);
   assert.match(still, /fetchpriority="high"/i);
   assert.doesNotMatch(still, /loading="lazy"/);
   assert.doesNotMatch(html, /class="w-canvas/, "the canvas is client-only, so the still is all the server paints");
+
+  // The head preload must describe the same candidates, or the still is fetched twice.
+  const imagePreloads = html.match(/<link[^>]*rel="preload"[^>]*as="image"[^>]*>/g) ?? [];
+  assert.equal(imagePreloads.length, 1, "one image preload for the still");
+  assert.ok(imagePreloads[0].toLowerCase().includes(`imagesrcset="${srcset}"`));
+  assert.match(imagePreloads[0], /imagesizes="100vw"/i);
+  assert.match(imagePreloads[0], /fetchpriority="high"/i);
+  assert.doesNotMatch(html, /world-fallback\.jpg/, "the JPEG is only the CSS fallback");
+});
+
+test("loads Google Fonts without blocking first paint", async () => {
+  const html = await (await render("/")).text();
+  const fonts = /https:\/\/fonts\.googleapis\.com\/css2\?family=Noto\+Sans\+JP/;
+  const noscripts = html.match(/<noscript>[\s\S]*?<\/noscript>/g) ?? [];
+  const outsideNoscript = html.replace(/<noscript>[\s\S]*?<\/noscript>/g, "");
+  const links = outsideNoscript.match(/<link[^>]*>/g) ?? [];
+  assert.ok(!links.some((link) => /rel="stylesheet"/.test(link) && fonts.test(link)), "no blocking font stylesheet");
+  assert.ok(links.some((link) => /rel="preload"/.test(link) && /as="style"/.test(link) && fonts.test(link)), "the font CSS is preloaded");
+  assert.ok(links.some((link) => /rel="preconnect" href="https:\/\/fonts\.googleapis\.com"/.test(link)));
+  assert.ok(links.some((link) => /rel="preconnect" href="https:\/\/fonts\.gstatic\.com"/.test(link)));
+  assert.match(outsideNoscript, /<script>[^<]*l\.rel="stylesheet"[^<]*fonts\.googleapis\.com/, "a script attaches the stylesheet");
+  assert.ok(noscripts.some((block) => /<link rel="stylesheet"/.test(block) && fonts.test(block)), "no-JS visitors still get the fonts");
+});
+
+test("caches hashed assets for a year and public images for a week, never the page", async () => {
+  const headers = await readFile(new URL("../dist/client/_headers", import.meta.url), "utf8");
+  const rules = new Map();
+  let path = "";
+  for (const line of headers.split(/\r?\n/)) {
+    if (!line.trim() || line.startsWith("#")) continue;
+    if (/^\s/.test(line)) rules.get(path).push(line.trim());
+    else rules.set((path = line.trim()), []);
+  }
+  assert.deepEqual(rules.get("/assets/*"), ["Cache-Control: public, max-age=31536000, immutable"]);
+  const week = ["Cache-Control: public, max-age=604800, stale-while-revalidate=86400"];
+  for (const image of ["/world-fallback*", "/jplearn-*", "/ks-*", "/og.jpg"]) assert.deepEqual(rules.get(image), week);
+  for (const pattern of rules.keys()) {
+    const regex = new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
+    assert.ok(!regex.test("/") && !regex.test("/index.html"), `${pattern} must not match the HTML page`);
+  }
 });
 
 test("gives visitors a real, working call to action", async () => {

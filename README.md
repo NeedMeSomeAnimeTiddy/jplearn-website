@@ -42,8 +42,10 @@ npm run lint
 
 ## How the world boots
 
-The server HTML paints `public/world-fallback.jpg` as a fixed full-viewport still
-(`.w-still`) from the first frame. three.js is not imported until the page has
+The server HTML paints a WebP copy of `public/world-fallback.jpg` as a fixed
+full-viewport still (`.w-still`) from the first frame: `world-fallback.webp`
+(1920×1080) with `world-fallback-960.webp` in its `srcset` for phones. React
+copies the `srcset` into the head preload, so only one file is fetched. three.js is not imported until the page has
 fired `load` and the browser reports idle time (`requestIdleCallback`, 2 s
 timeout). Before mounting, `app/page.tsx` probes a throwaway WebGL context with
 `failIfMajorPerformanceCaveat`; when there is no hardware context, or the renderer
@@ -77,7 +79,25 @@ this project, `BROWSER_CHANNEL` to another installed Chromium channel, and
 `WORLD_URL` to use a different dev-server address. Browser tooling is not included
 in the site's dependencies. Set `WORLD_OUTPUT_DIRECTORY` to keep separate review passes.
 `--write-fallback` captures the text-free hero at
-1920×1080 into `public/world-fallback.jpg`.
+1920×1080 into `public/world-fallback.jpg`. The JPEG is the source; after rewriting
+it, regenerate the WebP stills the page serves (quality 80 matches the JPEG at full
+screen; `sharp` is already installed through Next.js and the Cloudflare Vite plugin):
+
+```bash
+node -e "const sharp=require('sharp');const src='public/world-fallback.jpg';Promise.all([sharp(src).webp({quality:80,effort:6}).toFile('public/world-fallback.webp'),sharp(src).resize(960,540).webp({quality:80,effort:6}).toFile('public/world-fallback-960.webp')]).then((r)=>console.log(r.map((i)=>i.width+'x'+i.height+' '+i.size)))"
+```
+
+## Caching and fonts
+
+`public/_headers` is copied to `dist/client/_headers` for Cloudflare static assets.
+vinext writes its own `/assets/*` rule only when that file is missing, so ours
+repeats it (a year, immutable) and gives the unhashed public images a week with
+`stale-while-revalidate`. Keep its patterns specific: the HTML page stays uncached.
+
+Google Fonts load without blocking first paint: the layout preloads the font CSS
+and a small inline script attaches the stylesheet (`<noscript>` keeps a plain link).
+Until Sora arrives, text uses "Sora Fallback", Arial scaled to Sora's metrics in
+`app/world.css`, so the swap barely moves the layout.
 
 In development, `window.__nightflight` exposes `setProgress(0..1)`, `snap(time)`,
 `setSize(width, height)`, `resume()`, and `inspect()`. A stop's progress is its

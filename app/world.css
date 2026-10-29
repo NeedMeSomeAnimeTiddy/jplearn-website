@@ -2,6 +2,27 @@
    JPLearn — "Night Flight" · a twilight world flown by scroll
    ============================================================ */
 
+/* Arial scaled to Sora's measured width and vertical metrics (ascent 0.97em,
+   descent 0.29em; 13% wider at 400, 7% at 700), so the swap to Sora barely moves text. */
+@font-face {
+  font-family: "Sora Fallback";
+  src: local("Arial"), local("ArialMT");
+  font-weight: 300 500;
+  size-adjust: 113%;
+  ascent-override: 85.8%;
+  descent-override: 25.7%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Sora Fallback";
+  src: local("Arial Bold"), local("Arial-BoldMT");
+  font-weight: 600 800;
+  size-adjust: 107.2%;
+  ascent-override: 90.5%;
+  descent-override: 27.1%;
+  line-gap-override: 0%;
+}
+
 .w {
   --text: #f2eeff;
   --muted: rgba(242, 238, 255, 0.72);
@@ -10,7 +31,7 @@
   --glass-line: rgba(255, 255, 255, 0.16);
   --gold: #ffb45e;
   --sakura: #f2a7c3;
-  --display: "Sora", "Noto Sans JP", system-ui, sans-serif;
+  --display: "Sora", "Sora Fallback", "Noto Sans JP", "Hiragino Sans", "Yu Gothic", Meiryo, system-ui, sans-serif;
 
   position: relative;
   color: var(--text);
@@ -209,7 +230,7 @@
   padding: 10px 12px; border-radius: 12px;
   background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.09);
 }
-.w-track b { font-family: "Noto Sans JP", sans-serif; font-weight: 500; font-size: 22px; color: var(--gold); }
+.w-track b { font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif; font-weight: 500; font-size: 22px; color: var(--gold); }
 .w-track strong { display: block; font-size: 13.5px; font-weight: 700; }
 .w-track small { font-size: 11px; color: var(--faint); }
 
@@ -299,6 +320,7 @@
 .w-canvas.is-fallback {
   opacity: 1;
   background: url('/world-fallback.jpg') center / cover no-repeat;
+  background-image: image-set(url('/world-fallback.webp') type('image/webp'), url('/world-fallback.jpg') type('image/jpeg'));
 }
 .w-hero { position: relative; isolation: isolate; }
 .w-hero::before {

@@ -1,0 +1,17 @@
+# Copied to dist/client/_headers. vinext only generates its own /assets rule
+# when this file is absent, so that rule is repeated here.
+
+# Content-hashed build output never changes under the same name.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Unhashed public images: a week, then revalidate in the background.
+# Keep patterns specific so no rule reaches the HTML page.
+/world-fallback*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/jplearn-*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/ks-*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+/og.jpg
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400

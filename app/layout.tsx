@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { preload } from "react-dom";
 import { SITE_URL } from "./site-url";
 import { GITHUB_URL } from "./content";
 import "./globals.css";
@@ -8,6 +9,9 @@ const description = "Learn Japanese with a desktop app whose menu is a floating 
 
 const FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Sora:wght@400;500;600;700&display=swap";
+// A script-inserted stylesheet never blocks first paint; text shows in the
+// metric-matched fallback (world.css) until the fonts swap in.
+const FONTS_SCRIPT = `(function(){var l=document.createElement("link");l.rel="stylesheet";l.href=${JSON.stringify(FONTS_HREF)};document.head.appendChild(l)})()`;
 
 export const viewport: Viewport = {
   themeColor: "#070b24",
@@ -39,13 +43,18 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     publisher: { "@type": "Organization", name: "JPLearn", url: GITHUB_URL },
   };
 
+  preload(FONTS_HREF, { as: "style" });
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="stylesheet" href={FONTS_HREF} precedence="default" />
+        <script dangerouslySetInnerHTML={{ __html: FONTS_SCRIPT }} />
+        <noscript>
+          <link rel="stylesheet" href={FONTS_HREF} />
+        </noscript>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
         {children}
       </body>

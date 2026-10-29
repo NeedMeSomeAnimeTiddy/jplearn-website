@@ -1,7 +1,8 @@
 /** Optional real-browser regression/capture check against `npm run dev`.
  * Supply Playwright through PLAYWRIGHT_MODULE (a package name or file URL).
  * No browser tooling is shipped in the app. Run with --write-fallback to
- * regenerate public/world-fallback.jpg from the text-free 1920x1080 hero.
+ * regenerate public/world-fallback.jpg from the text-free 1920x1080 hero,
+ * then rebuild its WebP versions with the command in the README.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -18,10 +19,19 @@ const hideCopy = ".w main,.w-nav,.w-rail { visibility:hidden !important; } .w-ca
 const forced = `${origin}/?world=force`;
 // Requests that would mean the scene chunk or three.js was fetched (dev and build URLs).
 const sceneChunk = /WorldScene|\/three[./@-]|deps\/three/;
+const stillFile = /\/world-fallback[^/]*$/;
 await fs.mkdir(directory, { recursive: true });
+
+// The head preload and the <img> must agree on one candidate, so a load fetches the still once.
+function trackStill(page) {
+  const requests = [];
+  page.on("request", (request) => { if (stillFile.test(new URL(request.url()).pathname)) requests.push(request.url()); });
+  return requests;
+}
 
 async function open(options) {
   const page = await browser.newPage({ deviceScaleFactor: 1, ...options });
+  const stillRequests = trackStill(page);
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error" && /THREE.WebGLProgram|Shader Error|VALIDATE_STATUS/.test(message.text())) errors.push(message.text());
@@ -29,6 +39,10 @@ async function open(options) {
   await page.goto(forced, { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.__nightflight);
   await page.waitForSelector(".w-canvas.is-on:not(.is-fallback)");
+  const { width } = page.viewportSize();
+  const expected = width * (options.deviceScaleFactor ?? 1) <= 960 ? /\/world-fallback-960\.webp$/ : /\/world-fallback\.webp$/;
+  assert.equal(stillRequests.length, 1, `the still loads once at ${width}px: ${stillRequests.join(", ")}`);
+  assert.match(stillRequests[0], expected);
   await page.addStyleTag({ content: "html { scroll-behavior:auto !important; }" });
   return page;
 }
@@ -58,6 +72,7 @@ try {
   // server-rendered still stays visible and no canvas mounts.
   const software = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   software.on("pageerror", (error) => errors.push(error.message));
+  const softwareStillRequests = trackStill(software);
   const sceneRequests = [];
   software.on("request", (request) => { if (sceneChunk.test(request.url())) sceneRequests.push(request.url()); });
   await software.addInitScript(() => {
@@ -78,8 +93,9 @@ try {
   const softwareStill = await software.locator(".w-still").evaluate((image) => ({
     src: image.currentSrc, loaded: image.complete && image.naturalWidth > 0, opacity: getComputedStyle(image).opacity,
   }));
-  assert.match(softwareStill.src, /world-fallback\.jpg$/);
+  assert.match(softwareStill.src, /\/world-fallback\.webp$/);
   assert.ok(softwareStill.loaded, "the still must load");
+  assert.deepEqual(softwareStillRequests, [softwareStill.src], "the still loads once");
   assert.equal(softwareStill.opacity, "1", "the still stays visible without a live scene");
   await software.screenshot({ path: `${directory}/software-still.png` });
   await software.close();
@@ -125,6 +141,7 @@ try {
   await page.waitForTimeout(300);
   if (process.argv.includes("--write-fallback")) {
     await page.screenshot({ path: "public/world-fallback.jpg", type: "jpeg", quality: 92 });
+    console.log("Wrote public/world-fallback.jpg; regenerate the WebP stills with the README command.");
   }
   await page.evaluate(() => { window.__nightflight.setProgress(5 / 7); window.__nightflight.resume(); });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -186,9 +203,11 @@ try {
   // Forced past the probe so WorldScene's own renderer-failure path is exercised.
   await fallback.goto(forced, { waitUntil: "networkidle" });
   await fallback.waitForSelector(".w-canvas.is-fallback.is-on");
-  assert.match(await fallback.locator(".w-canvas").evaluate((element) => getComputedStyle(element).backgroundImage), /world-fallback.jpg/);
+  assert.match(await fallback.locator(".w-canvas").evaluate((element) => getComputedStyle(element).backgroundImage), /world-fallback\.webp/);
   assert.equal(await fallback.locator(".w-still").evaluate((image) => getComputedStyle(image).opacity), "1");
-  assert.equal((await fallback.request.get(`${origin}/world-fallback.jpg`)).status(), 200);
+  for (const file of ["world-fallback.jpg", "world-fallback.webp", "world-fallback-960.webp"]) {
+    assert.equal((await fallback.request.get(`${origin}/${file}`)).status(), 200, file);
+  }
   await fallback.screenshot({ path: `${directory}/fallback-check.png` });
   assert.deepEqual(errors, [], "no application errors during browser checks");
   await fs.writeFile(`${directory}/stats.json`, JSON.stringify(results, null, 2));

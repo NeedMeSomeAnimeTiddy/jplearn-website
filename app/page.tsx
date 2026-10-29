@@ -129,9 +129,19 @@ export default function Home() {
     <div className="w" ref={pageRef}>
       <div className="w-sky" aria-hidden="true" />
       {world && <WorldScene allowSoftwareRenderer={world.forced} />}
-      {/* The still paints with the page; world.css fades it once the canvas is live. */}
+      {/* The still paints with the page; world.css fades it once the canvas is live.
+          React's head preload copies srcSet/sizes, so only the chosen file is fetched. */}
       {/* eslint-disable-next-line @next/next/no-img-element -- a fixed backdrop, not content imagery */}
-      <img className="w-still" src="/world-fallback.jpg" alt="" aria-hidden="true" fetchPriority="high" decoding="async" />
+      <img
+        className="w-still"
+        src="/world-fallback.webp"
+        srcSet="/world-fallback-960.webp 960w, /world-fallback.webp 1920w"
+        sizes="100vw"
+        alt=""
+        aria-hidden="true"
+        fetchPriority="high"
+        decoding="async"
+      />
 
       <header className="w-nav">
         <Link className="w-brand" href="/">
