@@ -22,7 +22,8 @@ function hasHardwareWebGL() {
   const probe = document.createElement("canvas");
   const options: WebGLContextAttributes = { failIfMajorPerformanceCaveat: true };
   try {
-    const gl = probe.getContext("webgl2", options) ?? probe.getContext("webgl", options);
+    // three r185 is WebGL2-only, so a WebGL1-only device keeps the still.
+    const gl = probe.getContext("webgl2", options);
     if (!gl) return false;
     const info = gl.getExtension("WEBGL_debug_renderer_info");
     const renderer = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? "");
@@ -54,18 +55,28 @@ export default function Home() {
   useEffect(() => {
     let idle = 0;
     let timer = 0;
+    let stalled = 0;
+    let scheduled = false;
     const boot = () => {
       const forced = worldForced();
       if (forced || hasHardwareWebGL()) setWorld({ forced });
     };
     const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      window.clearTimeout(stalled);
       if (typeof window.requestIdleCallback === "function") idle = window.requestIdleCallback(boot, { timeout: 2000 });
       else timer = window.setTimeout(boot, 0);
     };
     if (document.readyState === "complete") schedule();
-    else window.addEventListener("load", schedule, { once: true });
+    else {
+      window.addEventListener("load", schedule, { once: true });
+      // One stalled subresource must not keep the world off for good.
+      stalled = window.setTimeout(schedule, 8000);
+    }
     return () => {
       window.removeEventListener("load", schedule);
+      window.clearTimeout(stalled);
       if (idle) window.cancelIdleCallback(idle);
       if (timer) window.clearTimeout(timer);
     };

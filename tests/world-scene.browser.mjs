@@ -46,7 +46,7 @@ try {
   console.log(`Headless renderer: ${nativeRenderer}`);
   await probe.close();
   if (!/swiftshader|llvmpipe|softpipe|microsoft basic render|software/i.test(nativeRenderer)) {
-    // Hardware WebGL: the scene must boot on its own, after load, with no override.
+    // Hardware WebGL: the scene must boot on its own with no override.
     const hardware = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     hardware.on("pageerror", (error) => errors.push(error.message));
     await hardware.goto(origin, { waitUntil: "load" });

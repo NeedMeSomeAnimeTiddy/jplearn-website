@@ -41,7 +41,7 @@ test("paints the world still before any three.js code loads", async () => {
   assert.match(still, /aria-hidden="true"/);
   assert.match(still, /fetchpriority="high"/i);
   assert.doesNotMatch(still, /loading="lazy"/);
-  assert.doesNotMatch(html, /class="w-canvas/, "the canvas mounts only on the client, after load");
+  assert.doesNotMatch(html, /class="w-canvas/, "the canvas is client-only, so the still is all the server paints");
 });
 
 test("gives visitors a real, working call to action", async () => {

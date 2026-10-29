@@ -717,7 +717,7 @@ function batchStaticGeometry(world: THREE.Group, animated: THREE.Object3D[]) {
 
 /* Lets input and paint run between build stages. scheduler.yield resumes ahead of
    other queued tasks where supported; setTimeout still yields in hidden tabs, where
-   a frame would never come. */
+   a frame would never come (though browsers throttle it to about 1 s there). */
 function yieldToBrowser() {
   const { scheduler } = globalThis as unknown as { scheduler?: { yield?: () => Promise<void> } };
   return scheduler?.yield ? scheduler.yield() : new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -1189,7 +1189,15 @@ async function startWorld(canvas: HTMLCanvasElement, allowSoftwareRenderer: bool
     textures.forEach((texture) => texture.dispose());
     renderer.dispose();
   };
-  const { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon, detailStats } = await buildWorld(glow, soft);
+  let built: Awaited<ReturnType<typeof buildWorld>>;
+  try {
+    built = await buildWorld(glow, soft);
+  } catch {
+    disposeAll();
+    canvas.classList.add("is-fallback", "is-on");
+    return;
+  }
+  const { world, lanterns, stars, starsFine, starsBright, fireflies, petals, streaks, orbitCards, pebbles, constellationStars, moon, detailStats } = built;
   scene.add(world);
   if (unmounted()) {
     disposeAll();
@@ -1500,7 +1508,18 @@ async function startWorld(canvas: HTMLCanvasElement, allowSoftwareRenderer: bool
      the driver works off the main thread; a context lost meanwhile reports its
      programs complete, and the loss/restore handlers decide whether to draw. */
   let disposed = false;
-  const compiled = renderer.compileAsync(scene, camera).catch(() => undefined).then(() => {
+  /* compileAsync calls compile() synchronously, and its poll can stall for good if
+     the context is restored mid-compile, so it gets a 10 s ceiling. A loss also
+     lets the loop arm, leaving the restore handler to start drawing. */
+  let compileSettled: Promise<unknown>;
+  try {
+    compileSettled = renderer.compileAsync(scene, camera).catch(() => undefined);
+  } catch {
+    compileSettled = Promise.resolve();
+  }
+  const compiled = Promise.race([compileSettled, new Promise((resolve) => window.setTimeout(resolve, 10_000))]);
+  const lost = new Promise((resolve) => canvas.addEventListener("webglcontextlost", resolve, { once: true }));
+  void Promise.race([compiled, lost]).then(() => {
     if (disposed) return;
     ready = true;
     if (!frame && !contextLost && !document.hidden) frame = window.requestAnimationFrame(render);
@@ -1531,10 +1550,10 @@ export function WorldScene({ allowSoftwareRenderer = false }: { allowSoftwareRen
     if (!canvas) return;
     let unmounted = false;
     let stop: (() => void) | undefined;
-    void startWorld(canvas, allowSoftwareRenderer, () => unmounted).then((cleanup) => {
+    startWorld(canvas, allowSoftwareRenderer, () => unmounted).then((cleanup) => {
       if (unmounted) cleanup?.();
       else stop = cleanup;
-    });
+    }, () => canvas.classList.add("is-fallback", "is-on"));
     return () => {
       unmounted = true;
       stop?.();
