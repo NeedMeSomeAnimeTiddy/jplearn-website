@@ -39,8 +39,10 @@ async function open(options) {
   await page.goto(forced, { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.__nightflight);
   await page.waitForSelector(".w-canvas.is-on:not(.is-fallback)");
-  const { width } = page.viewportSize();
-  const expected = width * (options.deviceScaleFactor ?? 1) <= 960 ? /\/world-fallback-960\.webp$/ : /\/world-fallback\.webp$/;
+  const { width, height } = page.viewportSize();
+  // Mirrors sizes="max(100vw, 177.78vh)"; ignores Chrome's geometric-mean rounding, so keep cases clear of 960.
+  const slot = Math.max(width, height * 16 / 9) * (options.deviceScaleFactor ?? 1);
+  const expected = slot <= 960 ? /\/world-fallback-960\.webp$/ : /\/world-fallback\.webp$/;
   assert.equal(stillRequests.length, 1, `the still loads once at ${width}px: ${stillRequests.join(", ")}`);
   assert.match(stillRequests[0], expected);
   await page.addStyleTag({ content: "html { scroll-behavior:auto !important; }" });
@@ -203,7 +205,6 @@ try {
   // Forced past the probe so WorldScene's own renderer-failure path is exercised.
   await fallback.goto(forced, { waitUntil: "networkidle" });
   await fallback.waitForSelector(".w-canvas.is-fallback.is-on");
-  assert.match(await fallback.locator(".w-canvas").evaluate((element) => getComputedStyle(element).backgroundImage), /world-fallback\.webp/);
   assert.equal(await fallback.locator(".w-still").evaluate((image) => getComputedStyle(image).opacity), "1");
   for (const file of ["world-fallback.jpg", "world-fallback.webp", "world-fallback-960.webp"]) {
     assert.equal((await fallback.request.get(`${origin}/${file}`)).status(), 200, file);

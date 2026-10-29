@@ -136,7 +136,7 @@ export default function Home() {
         className="w-still"
         src="/world-fallback.webp"
         srcSet="/world-fallback-960.webp 960w, /world-fallback.webp 1920w"
-        sizes="100vw"
+        sizes="max(100vw, 177.78vh)"
         alt=""
         aria-hidden="true"
         fetchPriority="high"

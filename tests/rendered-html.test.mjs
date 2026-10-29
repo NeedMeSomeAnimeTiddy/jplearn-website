@@ -40,7 +40,9 @@ test("paints the world still before any three.js code loads", async () => {
   const srcset = "/world-fallback-960.webp 960w, /world-fallback.webp 1920w";
   assert.match(still, /src="\/world-fallback\.webp"/);
   assert.ok(still.toLowerCase().includes(`srcset="${srcset}"`), "phones get the 960 WebP");
-  assert.match(still, /sizes="100vw"/);
+  // object-fit: cover draws the 16:9 still at least 16/9 of the viewport height wide.
+  const sizes = "max(100vw, 177.78vh)";
+  assert.ok(still.includes(`sizes="${sizes}"`), "sizes covers portrait screens");
   assert.match(still, /alt=""/);
   assert.match(still, /aria-hidden="true"/);
   assert.match(still, /fetchpriority="high"/i);
@@ -51,9 +53,9 @@ test("paints the world still before any three.js code loads", async () => {
   const imagePreloads = html.match(/<link[^>]*rel="preload"[^>]*as="image"[^>]*>/g) ?? [];
   assert.equal(imagePreloads.length, 1, "one image preload for the still");
   assert.ok(imagePreloads[0].toLowerCase().includes(`imagesrcset="${srcset}"`));
-  assert.match(imagePreloads[0], /imagesizes="100vw"/i);
+  assert.ok(imagePreloads[0].toLowerCase().includes(`imagesizes="${sizes}"`));
   assert.match(imagePreloads[0], /fetchpriority="high"/i);
-  assert.doesNotMatch(html, /world-fallback\.jpg/, "the JPEG is only the CSS fallback");
+  assert.doesNotMatch(html, /world-fallback\.jpg/, "the JPEG is only the source for the WebPs");
 });
 
 test("loads Google Fonts without blocking first paint", async () => {

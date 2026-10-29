@@ -6,7 +6,7 @@
    descent 0.29em; 13% wider at 400, 7% at 700), so the swap to Sora barely moves text. */
 @font-face {
   font-family: "Sora Fallback";
-  src: local("Arial"), local("ArialMT");
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("Arimo");
   font-weight: 300 500;
   size-adjust: 113%;
   ascent-override: 85.8%;
@@ -15,7 +15,7 @@
 }
 @font-face {
   font-family: "Sora Fallback";
-  src: local("Arial Bold"), local("Arial-BoldMT");
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("Arimo Bold");
   font-weight: 600 800;
   size-adjust: 107.2%;
   ascent-override: 90.5%;
@@ -316,12 +316,7 @@
 .w-footer b { color: var(--text); }
 .w-footer a { color: var(--muted); }
 .w-footer a:hover { color: var(--text); }
-/* The landscape keeps its contrast while copy has a quiet reading surface. */
-.w-canvas.is-fallback {
-  opacity: 1;
-  background: url('/world-fallback.jpg') center / cover no-repeat;
-  background-image: image-set(url('/world-fallback.webp') type('image/webp'), url('/world-fallback.jpg') type('image/jpeg'));
-}
+/* A fallback canvas stays transparent: the .w-still image above it is the picture. */
 .w-hero { position: relative; isolation: isolate; }
 .w-hero::before {
   content: ""; position: absolute; inset: -70px -45px; z-index: -1; pointer-events: none;

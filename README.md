@@ -44,8 +44,10 @@ npm run lint
 
 The server HTML paints a WebP copy of `public/world-fallback.jpg` as a fixed
 full-viewport still (`.w-still`) from the first frame: `world-fallback.webp`
-(1920×1080) with `world-fallback-960.webp` in its `srcset` for phones. React
-copies the `srcset` into the head preload, so only one file is fetched. three.js is not imported until the page has
+(1920×1080) with `world-fallback-960.webp` in its `srcset` for small landscape
+screens; `sizes` accounts for the cover crop, so portrait phones get the 1920 file.
+React copies the `srcset` into the head preload, so only one file is fetched.
+three.js is not imported until the page has
 fired `load` and the browser reports idle time (`requestIdleCallback`, 2 s
 timeout). Before mounting, `app/page.tsx` probes a throwaway WebGL context with
 `failIfMajorPerformanceCaveat`; when there is no hardware context, or the renderer
