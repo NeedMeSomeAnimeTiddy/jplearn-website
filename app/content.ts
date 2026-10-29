@@ -38,7 +38,7 @@ export const modes: Mode[] = [
   { name: "Sentence Assembly", jp: "組立", category: "Challenge", detail: "Rebuild the sentence from shuffled chunks." },
   { name: "Particle Cloze", jp: "助詞", category: "Challenge", detail: "Fill the missing は, が, を, に…" },
   { name: "Context Cloze", jp: "文脈", category: "Challenge", detail: "Fill the missing word from context." },
-  { name: "Compound Builder", jp: "熟語", category: "Challenge", detail: "Build multi-kanji words from their parts." },
+  { name: "Compound Builder", jp: "熟語", category: "Challenge", detail: "Pick the right multi-kanji word from its parts' meanings." },
   { name: "Vibe Check", jp: "空気", category: "Challenge", detail: "Polite, casual, or formal? Read the register." },
   { name: "Imposter", jp: "偽者", category: "Challenge", detail: "Find the planted grammar mistake." },
   { name: "Conjugation Drill", jp: "活用", category: "Challenge", detail: "Produce the te-form, potential, passive…" },
@@ -50,9 +50,9 @@ export const modes: Mode[] = [
 export type Faq = { q: string; a: string };
 
 export const faq: Faq[] = [
-  { q: "When does JPLearn launch?", a: "There's no fixed date yet. Development happens in the open — watching the repository on GitHub is the most current source of truth." },
+  { q: "When does JPLearn launch?", a: "JPLearn 1.0 is targeted for February 2027, after the Kickstarter campaign, with a backer beta before that. Dates are targets, not guarantees — watching the repository on GitHub is the most current source of truth." },
   { q: "What platforms will it run on?", a: "JPLearn is being built for Windows first. Other platforms depend on interest, so watching the repo genuinely helps that conversation." },
-  { q: "Will JPLearn be free?", a: "Pricing hasn't been decided. It'll be shared closer to launch — keeping daily study accessible is a goal, not an afterthought." },
+  { q: "Will JPLearn be free?", a: "It's a one-off purchase with no subscription — buy it once and it's yours to keep. On Kickstarter, a Windows licence starts at £15 (Early Bird, limited) or £25 (Full Access)." },
   { q: "Does the AI tutor need the internet?", a: "No. The tutor is optional and runs a locally installed model on your own machine. Explanations work offline, and nothing you type leaves your device." },
   { q: "What happens to my study data?", a: "It stays in a local database on your machine. There's no account, no telemetry, and no tracking — the app works fully offline." },
   { q: "Is JPLearn open source?", a: "Yes — the source, issues, and progress are all public on GitHub under the Apache 2.0 license." },

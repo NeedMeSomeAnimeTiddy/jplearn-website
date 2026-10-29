@@ -1,8 +1,6 @@
 import type { MetadataRoute } from "next";
-import { getBaseUrl } from "./site-url";
+import { SITE_URL } from "./site-url";
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = await getBaseUrl();
-
-  return [{ url: baseUrl, lastModified: new Date(), changeFrequency: "weekly", priority: 1 }];
+export default function sitemap(): MetadataRoute.Sitemap {
+  return [{ url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 }];
 }
